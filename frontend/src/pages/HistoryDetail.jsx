@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, AlertTriangle, Shield, Search, Zap, Download, FileJson, FileSpreadsheet, FileText, Clock, Hash, Bot } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Shield, Search, Zap, FileJson, FileSpreadsheet, FileText, Clock, Hash, Bot } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getScanDetail, exportJSON, exportCSV, exportPDF } from '../api/client';
 import { Button, Card, CardHeader, CardTitle, Badge, EmptyState, PageLoader } from '../components/ui';
@@ -14,6 +14,7 @@ export default function HistoryDetail() {
 
   useEffect(() => {
     loadDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function loadDetail() {

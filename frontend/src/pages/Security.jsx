@@ -7,6 +7,7 @@ const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 export default function Security() {
   const [filter, setFilter] = useState('all');
 
+  // eslint-disable-next-line no-unused-vars
   const { data: stats } = useQuery({
     queryKey: ['securityStats'],
     queryFn: async () => {

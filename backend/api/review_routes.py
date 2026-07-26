@@ -18,7 +18,7 @@ from database.mongodb import scan_service
 from services.github_client import GitHubClient, create_github_client
 from reviewer.github_commenter import GitHubCommenter
 from auth.jwt_auth import decode_token
-from ml.severity_classifier import SeverityClassifier as MLSeverityClassifier
+from ml.severity_classifier import MLSeverityClassifier
 
 
 review_bp = Blueprint('review', __name__)

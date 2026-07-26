@@ -15,12 +15,9 @@ import { getRepoBranches, getRepoPullRequests } from '../api/client';
 import {
   Button,
   Card,
-  CardHeader,
-  CardTitle,
   Badge,
   Select,
   EmptyState,
-  PageLoader,
   Skeleton,
 } from '../components/ui';
 
@@ -72,6 +69,7 @@ export default function Repository() {
       loadBranches();
       loadPullRequests();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repoFullName]);
 
   async function loadBranches() {

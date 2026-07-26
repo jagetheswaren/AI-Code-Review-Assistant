@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Bot, User, Loader2, Sparkles, Code2 } from 'lucide-react';
+import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { analyzeCode } from '../api/client';
-import { Button, EmptyState } from '../components/ui';
+import { Button } from '../components/ui';
 
 export default function AIChat() {
   const [messages, setMessages] = useState([]);

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Download, Calendar, AlertTriangle, Filter, FileJson, FileSpreadsheet } from 'lucide-react';
+import { FileText, Download, FileJson, FileSpreadsheet } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getHistory, exportJSON, exportCSV, exportPDF } from '../api/client';
-import { Button, Card, CardHeader, CardTitle, Badge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Dropdown, EmptyState, PageLoader } from '../components/ui';
+import { Button, Card, Badge, Table, TableHeader, TableBody, TableRow, TableHead, TableCell, Dropdown, EmptyState, PageLoader } from '../components/ui';
 
 export default function Reports() {
   const [scans, setScans] = useState([]);

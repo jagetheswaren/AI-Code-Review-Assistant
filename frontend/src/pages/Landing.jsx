@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Shield, Search, Zap, Brain, GitBranch, BarChart3, ArrowRight,
-  CheckCircle, Code2, ArrowUpRight, Star, Users, ScanSearch,
-  ChevronDown, Sparkles, Target, Lock, Cpu,
+  CheckCircle, Code2, Star, Users, ScanSearch,
+  ChevronDown, Sparkles, Target,
 } from 'lucide-react';
 import { cn, GithubIcon } from '../lib/utils';
 import { Button } from '../components/ui';
@@ -334,32 +334,32 @@ const Landing = () => {
               <ul className="space-y-2">
                 <li><a href="#features" className="text-xs text-slate-400 hover:text-white transition-colors">Features</a></li>
                 <li><a href="#pricing" className="text-xs text-slate-400 hover:text-white transition-colors">Pricing</a></li>
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Changelog</a></li>
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Documentation</a></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Changelog</button></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Documentation</button></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white mb-3">Company</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">About</a></li>
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Blog</a></li>
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Careers</a></li>
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Contact</a></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">About</button></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Blog</button></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Careers</button></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Contact</button></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white mb-3">Legal</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Privacy</a></li>
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Terms</a></li>
-                <li><a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Security</a></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Privacy</button></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Terms</button></li>
+                <li><button type="button" className="text-xs text-slate-400 hover:text-white transition-colors">Security</button></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-white/[0.06] mt-8 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-xs text-slate-500">&copy; 2026 IntelliReview. All rights reserved.</p>
             <div className="flex items-center gap-4">
-              <a href="#" className="text-slate-500 hover:text-white transition-colors"><GithubIcon className="w-4 h-4" /></a>
+              <a href="https://github.com/jagetheswaren/AI-Code-Review-Assistant" className="text-slate-500 hover:text-white transition-colors"><GithubIcon className="w-4 h-4" /></a>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -22,7 +22,6 @@ import { Avatar } from '../ui';
 const Navbar = ({ onMenuClick }) => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const isDark = theme === 'dark';
 
   const [unreadCount, setUnreadCount] = useState(0);

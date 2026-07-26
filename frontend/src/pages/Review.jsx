@@ -10,10 +10,9 @@ import {
   Upload,
   Code2,
   FileText,
-  Loader2,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { analyzeCode, analyzeFile } from '../api/client';
+import { analyzeCode } from '../api/client';
 import { useToast } from '../contexts/ToastContext';
 import {
   Button,
@@ -25,7 +24,6 @@ import {
   Select,
   EmptyState,
   PageLoader,
-  Skeleton,
 } from '../components/ui';
 
 const fadeUp = {

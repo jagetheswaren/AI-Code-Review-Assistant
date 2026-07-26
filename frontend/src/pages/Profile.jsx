@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, Mail, Key, Save, Trash2, Calendar, Camera, Loader2, AlertTriangle } from 'lucide-react';
-import { cn, GithubIcon } from '../lib/utils';
+import { GithubIcon } from '../lib/utils';
 import { getProfile, updateProfile, changePassword, deleteAccount } from '../api/client';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';

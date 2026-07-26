@@ -11,13 +11,11 @@ import {
   Unplug,
   Key,
 } from 'lucide-react';
-import { cn, GithubIcon } from '../lib/utils';
+import { GithubIcon } from '../lib/utils';
 import { getGitHubStatus, getGitHubRepos } from '../api/client';
 import {
   Button,
   Card,
-  CardHeader,
-  CardTitle,
   Badge,
   Input,
   EmptyState,
@@ -81,6 +79,7 @@ export default function GitHubIntegration() {
 
   useEffect(() => {
     loadStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadStatus() {

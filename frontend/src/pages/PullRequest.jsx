@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -11,10 +11,7 @@ import {
   FileCode,
   Shield,
   Search,
-  Zap,
   AlertTriangle,
-  Loader2,
-  Download,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { analyzePullRequest } from '../api/client';
@@ -22,12 +19,9 @@ import { useToast } from '../contexts/ToastContext';
 import {
   Button,
   Card,
-  CardHeader,
-  CardTitle,
   Badge,
   EmptyState,
   PageLoader,
-  Skeleton,
 } from '../components/ui';
 
 const fadeUp = {

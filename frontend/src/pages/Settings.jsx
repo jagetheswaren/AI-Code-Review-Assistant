@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, Sun, Moon, Bell, BellOff, Key, Shield, Save, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, Sun, Bell, Shield, Save, Trash2 } from 'lucide-react';
 import { cn, GithubIcon } from '../lib/utils';
 import { getSettings, updateSettings } from '../api/client';
 import { useToast } from '../contexts/ToastContext';
-import { Button, Card, CardHeader, CardTitle, Input, Select, Modal, EmptyState, PageLoader } from '../components/ui';
+import { Button, Card, CardHeader, CardTitle, Input, Select, Modal, PageLoader } from '../components/ui';
 
 export default function Settings() {
   const { toast } = useToast();
