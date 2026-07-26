@@ -10,3 +10,4 @@ frontend/build/
 __pycache__/
 *.py[cod]
 coverage.xml
+copilot-diagnostics-*.zip
