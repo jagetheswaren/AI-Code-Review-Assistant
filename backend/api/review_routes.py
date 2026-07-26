@@ -163,9 +163,11 @@ def github_webhook():
     payload = request.get_data()
 
     webhook_secret = current_app.config.get('GITHUB_WEBHOOK_SECRET')
-    if webhook_secret:
-        if not _verify_signature(payload, signature, webhook_secret):
-            return jsonify({"error": "Invalid signature"}), 401
+    if not webhook_secret:
+        return jsonify({"error": "Webhook secret not configured"}), 503
+
+    if not _verify_signature(payload, signature, webhook_secret):
+        return jsonify({"error": "Invalid signature"}), 401
 
     event = request.headers.get('X-GitHub-Event', '')
     if event != 'pull_request':
