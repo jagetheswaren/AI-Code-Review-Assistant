@@ -4,9 +4,7 @@ const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_BASE,
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  headers: { 'Content-Type': 'application/json' }
 });
 
 api.interceptors.request.use((config) => {
@@ -28,7 +26,7 @@ api.interceptors.response.use(
   }
 );
 
-export const analyzeCode = (code, filename) => 
+export const analyzeCode = (code, filename) =>
   api.post('/analyze', { code, filename });
 
 export const analyzeFile = (file) => {
@@ -68,5 +66,59 @@ export const getCurrentUser = () =>
 
 export const refreshToken = () =>
   api.post('/refresh');
+
+export const getGitHubStatus = () =>
+  api.get('/github/status');
+
+export const getGitHubRepos = () =>
+  api.get('/github/repos');
+
+export const getRepoBranches = (repoFullName) =>
+  api.get(`/github/repos/${repoFullName}/branches`);
+
+export const getRepoPullRequests = (repoFullName) =>
+  api.get(`/github/repos/${repoFullName}/pull-requests`);
+
+export const analyzePullRequest = (repoFullName, prNumber) =>
+  api.post(`/github/repos/${repoFullName}/pull-requests/${prNumber}/analyze`);
+
+export const getNotifications = (params = {}) =>
+  api.get('/notifications', { params });
+
+export const markNotificationRead = (id) =>
+  api.put(`/notifications/${id}/read`);
+
+export const markAllNotificationsRead = () =>
+  api.put('/notifications/read-all');
+
+export const deleteNotification = (id) =>
+  api.delete(`/notifications/${id}`);
+
+export const getSettings = () =>
+  api.get('/settings');
+
+export const updateSettings = (data) =>
+  api.put('/settings', data);
+
+export const getProfile = () =>
+  api.get('/profile');
+
+export const updateProfile = (data) =>
+  api.put('/profile', data);
+
+export const changePassword = (current_password, new_password) =>
+  api.put('/profile/password', { current_password, new_password });
+
+export const deleteAccount = () =>
+  api.delete('/account', { data: { confirm: true } });
+
+export const exportJSON = (scanId) =>
+  api.get(`/export/json/${scanId}`, { responseType: 'blob' });
+
+export const exportCSV = (scanId) =>
+  api.get(`/export/csv/${scanId}`, { responseType: 'blob' });
+
+export const exportPDF = (scanId) =>
+  api.get(`/export/pdf/${scanId}`, { responseType: 'blob' });
 
 export default api;

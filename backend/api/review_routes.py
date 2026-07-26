@@ -7,6 +7,7 @@ from functools import wraps
 from analyzers.security_analyzer import SecurityAnalyzer
 from analyzers.smell_analyzer import SmellAnalyzer
 from analyzers.complexity_analyzer import ComplexityAnalyzer
+from analyzers.performance_analyzer import PerformanceAnalyzer
 from reviewer.ai_reviewer import AIReviewer
 from reviewer.aggregator import FindingAggregator
 from models.review import ReviewRequest, ReviewResponse, AnalysisSummary, FileAnalysis, Issue, IssueType, Severity
@@ -17,6 +18,7 @@ from database.mongodb import scan_service
 from services.github_client import GitHubClient, create_github_client
 from reviewer.github_commenter import GitHubCommenter
 from auth.jwt_auth import decode_token
+from ml.severity_classifier import SeverityClassifier as MLSeverityClassifier
 
 
 review_bp = Blueprint('review', __name__)
@@ -24,8 +26,11 @@ review_bp = Blueprint('review', __name__)
 security_analyzer = SecurityAnalyzer()
 smell_analyzer = SmellAnalyzer()
 complexity_analyzer = ComplexityAnalyzer()
+performance_analyzer = PerformanceAnalyzer()
 ai_reviewer = AIReviewer()
 aggregator = FindingAggregator()
+ml_classifier = MLSeverityClassifier()
+ml_classifier.load()
 
 
 def token_required(f):
@@ -70,15 +75,26 @@ def analyze_code():
     security_issues = security_analyzer.analyze(code, filename)
     smell_issues = smell_analyzer.analyze(code, filename)
     complexity_issues = complexity_analyzer.analyze(code, filename)
+    performance_issues = performance_analyzer.analyze(code, filename)
 
-    all_issues = security_issues.issues + smell_issues + complexity_issues
+    all_issues = security_issues.issues + smell_issues + complexity_issues + performance_issues
 
     # Enhance issues with NLP explanations
     for issue in all_issues:
-        # Static findings already include actionable suggestions.  Keep the
-        # request resilient when the optional NLP model is not installed.
-        issue.explanation = issue.message
-        issue.fix_suggestion = issue.suggestion
+        try:
+            ai_reviewer.enhance_issue_with_nlp(issue, code[:2000])
+        except Exception:
+            issue.explanation = issue.message
+            issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
+
+        # ML severity prediction
+        try:
+            ml_result = ml_classifier.predict(issue.message, issue.rule_id or "", issue.line_number)
+            if ml_result.get("model_available"):
+                issue.ml_severity = ml_result["severity"]
+                issue.ml_confidence = ml_result["confidence"]
+        except Exception:
+            pass
 
     ai_review = ai_reviewer.review_code(code, filename, all_issues)
 

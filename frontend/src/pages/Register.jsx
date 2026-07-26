@@ -1,149 +1,147 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ScanSearch, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import { Button, Input } from '../components/ui';
+import { cn, GithubIcon } from '../lib/utils';
+
+const passwordChecks = [
+  { label: 'At least 8 characters', test: (p) => p.length >= 8 },
+  { label: 'Contains uppercase letter', test: (p) => /[A-Z]/.test(p) },
+  { label: 'Contains number', test: (p) => /[0-9]/.test(p) },
+];
 
 const Register = () => {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
   const navigate = useNavigate();
+  const { register } = useAuth();
+  const { success, error: toastError } = useToast();
+
+  const [form, setForm] = useState({ username: '', email: '', password: '', confirmPassword: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const passwordStrength = passwordChecks.filter((c) => c.test(form.password)).length;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
+    if (form.password !== form.confirmPassword) {
+      toastError('Passwords do not match');
       return;
     }
-
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-
     setLoading(true);
-
     try {
-      await register(username, email, password);
+      await register(form.username, form.email, form.password);
+      success('Account created! Welcome aboard.');
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed');
+      toastError(err.response?.data?.error || 'Registration failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <div className="mx-auto h-12 w-12 bg-blue-600 rounded-full flex items-center justify-center">
-            <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-          </div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            AI Code Review Assistant
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Create your account
-          </p>
+    <div className="min-h-screen flex bg-[#0F172A]">
+      {/* Left panel */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#7C3AED] to-[#2563EB] items-center justify-center overflow-hidden">
+        <div className="absolute inset-0">
+          <div className="absolute top-32 right-20 w-72 h-72 bg-white/10 rounded-full blur-[80px]" />
+          <div className="absolute bottom-32 left-20 w-60 h-60 bg-white/10 rounded-full blur-[60px]" />
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
-              {error}
+        <div className="relative z-10 px-12 max-w-lg">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <ScanSearch className="w-6 h-6 text-white" />
             </div>
-          )}
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="username" className="sr-only">Username</label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Username"
-              />
+            <span className="text-2xl font-bold text-white">IntelliReview</span>
+          </div>
+          <h2 className="text-3xl font-bold text-white mb-4 leading-tight">Start shipping cleaner code today</h2>
+          <p className="text-white/80 text-lg leading-relaxed">Join thousands of developers who trust IntelliReview to keep their code clean, secure, and performant.</p>
+          <div className="mt-12 grid grid-cols-2 gap-4">
+            {[
+              { value: '50K+', label: 'Lines analyzed' },
+              { value: '2.5K', label: 'Issues found' },
+              { value: '98%', label: 'Accuracy' },
+              { value: '100+', label: 'Active users' },
+            ].map((stat, i) => (
+              <div key={i} className="rounded-xl bg-white/10 backdrop-blur-sm p-4 text-center">
+                <p className="text-2xl font-bold text-white">{stat.value}</p>
+                <p className="text-xs text-white/70">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel */}
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+          <div className="lg:hidden flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#7C3AED] flex items-center justify-center">
+              <ScanSearch className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <label htmlFor="email" className="sr-only">Email address</label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Email address"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password (min 8 characters)"
-              />
-            </div>
-            <div>
-              <label htmlFor="confirmPassword" className="sr-only">Confirm Password</label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm Password"
-              />
-            </div>
+            <span className="text-xl font-bold text-white">IntelliReview</span>
           </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {loading ? (
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              ) : (
-                'Create account'
-              )}
-            </button>
+          <h1 className="text-2xl font-bold text-white mb-2">Create your account</h1>
+          <p className="text-sm text-slate-400 mb-8">Get started with IntelliReview in seconds</p>
+
+          <button onClick={() => window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/github/oauth/authorize`} className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl bg-white/5 border border-white/[0.06] text-sm font-medium text-white hover:bg-white/10 transition-colors mb-6">
+            <GithubIcon className="w-5 h-5" />
+            Continue with GitHub
+          </button>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/[0.06]" /></div>
+            <div className="relative flex justify-center"><span className="bg-[#0F172A] px-3 text-xs text-slate-500">or sign up with email</span></div>
           </div>
-        </form>
-        <div className="text-center">
-          <p className="text-sm text-gray-600">
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input label="Username" icon={User} placeholder="johndoe" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required />
+            <Input label="Email" type="email" icon={Mail} placeholder="you@example.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+            <div className="relative">
+              <Input label="Password" type={showPassword ? 'text' : 'password'} icon={Lock} placeholder="Create a strong password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-[38px] text-slate-500 hover:text-slate-300 transition-colors">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {form.password && (
+              <div className="space-y-2">
+                <div className="flex gap-1">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className={cn('h-1 flex-1 rounded-full transition-colors', i < passwordStrength ? 'bg-emerald-400' : 'bg-white/10')} />
+                  ))}
+                </div>
+                <div className="space-y-1">
+                  {passwordChecks.map((check, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <Check className={cn('w-3 h-3', check.test(form.password) ? 'text-emerald-400' : 'text-slate-600')} />
+                      <span className={check.test(form.password) ? 'text-slate-300' : 'text-slate-500'}>{check.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Input label="Confirm Password" type="password" icon={Lock} placeholder="Confirm your password" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} required />
+
+            {form.confirmPassword && form.password !== form.confirmPassword && (
+              <p className="text-xs text-red-400">Passwords do not match</p>
+            )}
+
+            <Button type="submit" loading={loading} disabled={form.password !== form.confirmPassword} className="w-full" size="lg">
+              Create Account <ArrowRight className="w-4 h-4" />
+            </Button>
+          </form>
+
+          <p className="text-sm text-slate-400 text-center mt-6">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
-              Sign in
-            </Link>
+            <Link to="/login" className="text-[#2563EB] hover:text-[#60A5FA] font-medium transition-colors">Sign in</Link>
           </p>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

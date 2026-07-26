@@ -3,7 +3,7 @@ version: '3.8'
 services:
   mongodb:
     image: mongo:7
-    container_name: code-review-mongodb
+    container_name: intellireview-mongodb
     ports:
       - "27017:27017"
     volumes:
@@ -18,7 +18,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: code-review-ollama
+    container_name: intellireview-ollama
     ports:
       - "11434:11434"
     volumes:
@@ -30,19 +30,12 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: code-review-backend
+    container_name: intellireview-backend
     ports:
       - "5000:5000"
     environment:
@@ -51,11 +44,15 @@ services:
       - JWT_SECRET=dev-secret-change-in-production
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GITHUB_OAUTH_CALLBACK_URL=http://localhost:5000/api/github/oauth/callback
       - OLLAMA_MODEL=qwen2.5-coder:3b
       - OLLAMA_BASE_URL=http://ollama:11434
       - CORS_ORIGINS=http://localhost:3000
     volumes:
       - ./backend:/app
+      - ./ml:/app/ml
     depends_on:
       mongodb:
         condition: service_healthy
@@ -67,7 +64,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: code-review-frontend
+    container_name: intellireview-frontend
     ports:
       - "3000:80"
     environment:
@@ -81,4 +78,4 @@ volumes:
 
 networks:
   default:
-    name: code-review-network
+    name: intellireview-network

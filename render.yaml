@@ -2,25 +2,27 @@ services:
   - type: web
     name: ai-code-review-api
     runtime: python
-    rootDir: backend
-    buildCommand: pip install --no-cache-dir -r requirements.txt
-    startCommand: gunicorn --config gunicorn.conf.py app:app
-    healthCheckPath: /health
-    autoDeploy: true
+    plan: free
+    buildCommand: cd backend && pip install -r requirements.txt && python -m ml.train_ml_models || true
+    startCommand: cd backend && gunicorn --config gunicorn.conf.py app:app
     envVars:
       - key: FLASK_ENV
         value: production
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: MONGO_URI
         sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
         sync: false
-      - key: GITHUB_TOKEN
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_OAUTH_CALLBACK_URL
         sync: false
       - key: GITHUB_WEBHOOK_SECRET
-        generateValue: true
-      - key: OLLAMA_BASE_URL
         sync: false
+      - key: OLLAMA_BASE_URL
+        value: ""
+      - key: LOG_LEVEL
+        value: INFO

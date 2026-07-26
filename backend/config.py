@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     github_client_secret: Optional[str] = None
     github_oauth_callback_url: Optional[str] = None
     log_level: str = "INFO"
+    ml_model_path: str = "ml/ml_model.pkl"
+    nlp_model_name: str = "microsoft/codebert-base"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -26,7 +28,6 @@ class Settings(BaseSettings):
         return [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]
 
     def validate_production_settings(self) -> None:
-        """Fail early for unsafe Render configuration instead of serving insecurely."""
         if self.flask_env.lower() != "production":
             return
         missing = []

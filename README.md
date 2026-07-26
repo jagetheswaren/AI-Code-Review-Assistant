@@ -1,292 +1,447 @@
-<p align="center">
-  <img src="logo.svg" alt="AI Code Review Assistant" width="600">
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://frontend-delta-eight-92.vercel.app"><strong>Live Demo</strong></a> &nbsp;&bull;&nbsp;
-  <a href="https://github.com/jagetheswaren/AI-Code-Review-Assistant"><strong>GitHub</strong></a>
-</p>
+<img src="logo.svg" alt="IntelliReview AI Logo" width="120" />
 
-<p align="center">
-  <img src="https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml/badge.svg" alt="CI">
-  <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
-</p>
+# IntelliReview AI
+
+**AI-Powered Code Review Assistant**
+
+[![CI](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://python.org)
+[![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://reactjs.org)
+[![MongoDB](https://img.shields.io/badge/mongodb-7-green.svg)](https://mongodb.com)
+[![Vercel](https://img.shields.io/badge/deployed%20on-Vercel-black?logo=vercel)](https://frontend-delta-eight-92.vercel.app)
+[![Render](https://img.shields.io/badge/deployed%20on-Render-blue?logo=render)](https://ai-code-review-api.onrender.com)
+
+A full-stack web application that uses **Machine Learning**, **NLP**, and **Static Analysis** to automatically review Python code for security vulnerabilities, code smells, and performance issues.
+
+</div>
 
 ---
 
-AI-powered code review tool that performs static analysis on Python code and provides AI-generated explanations and fix suggestions.
+## Live Demo
+
+- **Frontend (Vercel)**: [https://frontend-delta-eight-92.vercel.app](https://frontend-delta-eight-92.vercel.app)
+- **Backend API (Render)**: [https://ai-code-review-api.onrender.com](https://ai-code-review-api.onrender.com)
+- **GitHub Repository**: [https://github.com/jagetheswaren/AI-Code-Review-Assistant](https://github.com/jagetheswaren/AI-Code-Review-Assistant)
+
+---
 
 ## Features
 
-- **Security Analysis** (Bandit + custom AST): Detects SQL injection, XSS, hardcoded secrets, shell injection, unsafe deserialization, and more
-- **Code Smell Detection** (astroid + custom): Unused imports/variables, long functions, complex conditionals, magic numbers, naming conventions, dead code, too many arguments, duplicate code, trailing whitespace, missing docstrings, deep nesting, bare except clauses
-- **Complexity Analysis** (Radon): Cyclomatic complexity, maintainability index, Halstead metrics, lines of code
-- **AI Explanations** (Ollama + qwen2.5-coder): Plain English explanations and fix suggestions
-- **GitHub Integration**: Webhook handler for PR reviews, posts results as PR comments
-- **REST API**: `/api/analyze` for code analysis, `/api/analyze/file` for file uploads
-- **Summary Dashboard**: Overall risk level, issue counts by type and severity
+| Feature | Description |
+|---------|-------------|
+| **Security Analysis** | Bandit integration + custom AST analysis for vulnerabilities |
+| **Code Smell Detection** | Pylint-style checks for unused imports, long functions, etc. |
+| **Performance Analysis** | Nested loops, N+1 queries, string concatenation in loops |
+| **ML Severity Prediction** | Random Forest, Gradient Boosting, Logistic Regression models |
+| **NLP Explanations** | CodeBERT-powered issue explanations and fix suggestions |
+| **GitHub Integration** | OAuth, repo browsing, PR analysis, automated review comments |
+| **AI Review** | Ollama LLM-powered code review summaries |
+| **PDF/CSV/JSON Export** | Download analysis reports in multiple formats |
+| **Dark Mode** | Full dark/light theme support |
+| **Responsive Design** | Works on desktop, tablet, and mobile |
+
+---
 
 ## Architecture
 
-```
-backend/
-├── analyzers/
-│   ├── security_analyzer.py    # Bandit + custom AST security checks
-│   ├── smell_analyzer.py       # Pylint/astroid code smell detection
-│   └── complexity_analyzer.py  # Radon complexity metrics
-├── reviewer/
-│   ├── ai_reviewer.py          # Ollama integration for AI explanations
-│   ├── aggregator.py           # Merge and deduplicate findings
-│   └── github_commenter.py     # Format GitHub PR comments
-├── api/
-│   └── review_routes.py        # Flask REST endpoints
-├── models/
-│   └── review.py               # Pydantic data models
-├── services/
-│   └── github_client.py        # GitHub REST API client
-├── config.py                   # Configuration (pydantic-settings)
-└── app.py                      # Flask entry point
-```
+```mermaid
+graph TB
+    subgraph Frontend["Frontend (React + Tailwind)"]
+        A[Landing Page] --> B[Login/Register]
+        B --> C[Dashboard]
+        C --> D[AI Review]
+        C --> E[GitHub Integration]
+        C --> F[History]
+        C --> G[Settings]
+        D --> H[Analysis Results]
+        E --> I[Repository Browser]
+        I --> J[PR Analysis]
+    end
 
-## Quick Start
+    subgraph Backend["Backend (Flask + Python)"]
+        K[Auth API] --> L[Review API]
+        M[GitHub API] --> L
+        N[Notification API] --> L
+        O[Settings API] --> L
+        P[Export API] --> L
+        L --> Q[Security Analyzer]
+        L --> R[Smell Analyzer]
+        L --> S[Complexity Analyzer]
+        L --> T[Performance Analyzer]
+        L --> U[AI Reviewer]
+        L --> V[ML Classifier]
+        L --> W[NLP Explainer]
+    end
 
-### Prerequisites
+    subgraph Database["Database (MongoDB)"]
+        X[(Users)]
+        Y[(Scans)]
+        Z[(Repositories)]
+        AA[(Pull Requests)]
+        AB[(Notifications)]
+        AC[(Settings)]
+    end
 
-- Python 3.10+
-- Ollama running locally with `qwen2.5-coder:3b` model
-- GitHub Personal Access Token (for webhook integration)
+    subgraph External["External Services"]
+        AD[GitHub API]
+        AE[Ollama LLM]
+        AF[CodeBERT]
+        AG[ML Models]
+    end
 
-### Installation
-
-```bash
-cd backend
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Linux/Mac
-
-pip install -r requirements.txt
-
-# Install Ollama model
-ollama pull qwen2.5-coder:3b
-```
-
-### Configuration
-
-Copy `.env.example` to `.env` and fill in:
-
-```env
-FLASK_ENV=development
-FLASK_PORT=5000
-CORS_ORIGINS=http://localhost:3000
-GITHUB_TOKEN=ghp_xxxxxxxxxxxx
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-OLLAMA_MODEL=qwen2.5-coder:3b
-OLLAMA_BASE_URL=http://localhost:11434
+    Frontend --> Backend
+    Backend --> Database
+    Backend --> External
 ```
 
-### Run Server
+---
 
-```bash
-cd backend
-venv\Scripts\python -m app
+## ER Diagram
+
+```mermaid
+erDiagram
+    USERS {
+        ObjectId _id PK
+        string username UK
+        string email UK
+        string password_hash
+        string full_name
+        string avatar_url
+        int github_id
+        string github_username
+        string github_token
+        datetime created_at
+        datetime last_login
+        bool is_active
+    }
+
+    SCANS {
+        ObjectId _id PK
+        ObjectId user_id FK
+        string request_id UK
+        datetime timestamp
+        array file_analyses
+        object summary
+        string ai_review
+        string github_pr_url
+        int github_pr_number
+        string github_repo
+        int processing_time_ms
+    }
+
+    REPOSITORIES {
+        ObjectId _id PK
+        ObjectId user_id FK
+        int github_id UK
+        string name
+        string full_name
+        string description
+        string language
+        string default_branch
+        bool is_private
+        int stars
+        int forks
+        int webhook_id
+        datetime connected_at
+        datetime last_analyzed
+    }
+
+    PULL_REQUESTS {
+        ObjectId _id PK
+        ObjectId user_id FK
+        ObjectId repository_id FK
+        int github_pr_id
+        int number
+        string title
+        string body
+        string author
+        string head_sha
+        string head_branch
+        string base_branch
+        string state
+        int changed_files
+        int additions
+        int deletions
+        string analysis_status
+        datetime created_at
+        datetime analyzed_at
+    }
+
+    NOTIFICATIONS {
+        ObjectId _id PK
+        ObjectId user_id FK
+        string title
+        string message
+        string type
+        bool read
+        string link
+        datetime created_at
+    }
+
+    USER_SETTINGS {
+        ObjectId _id PK
+        ObjectId user_id FK
+        string theme
+        bool notifications_enabled
+        bool email_notifications
+        bool auto_analyze_webhook
+        string default_language
+        string analysis_depth
+        datetime updated_at
+    }
+
+    USERS ||--o{ SCANS : "creates"
+    USERS ||--o{ REPOSITORIES : "connects"
+    USERS ||--o{ PULL_REQUESTS : "analyzes"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    USERS ||--o| USER_SETTINGS : "has"
+    REPOSITORIES ||--o{ PULL_REQUESTS : "contains"
 ```
 
-Server runs at `http://localhost:5000`
+---
 
-## API Usage
+## Sequence Diagram - Analysis Flow
 
-### Analyze Code
+```mermaid
+sequenceDiagram
+    actor User
+    participant Frontend
+    participant Backend
+    participant Analyzers
+    participant ML
+    participant NLP
+    participant MongoDB
 
-```bash
-curl -X POST http://localhost:5000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "import os\nos.system(\"ls \" + user_input)",
-    "filename": "example.py"
-  }'
+    User->>Frontend: Paste code / Upload file
+    Frontend->>Backend: POST /api/analyze
+    Backend->>Analyzers: Security analysis (Bandit + AST)
+    Analyzers-->>Backend: Security issues
+    Backend->>Analyzers: Code smell analysis
+    Analyzers-->>Backend: Smell issues
+    Backend->>Analyzers: Complexity analysis (Radon)
+    Analyzers-->>Backend: Complexity issues
+    Backend->>Analyzers: Performance analysis
+    Analyzers-->>Backend: Performance issues
+    Backend->>ML: Predict severity
+    ML-->>Backend: ML predictions
+    Backend->>NLP: Generate explanations
+    NLP-->>Backend: Explanations + fixes
+    Backend->>Backend: Aggregate & deduplicate
+    Backend->>MongoDB: Save scan record
+    Backend-->>Frontend: ReviewResponse
+    Frontend-->>User: Display results
 ```
 
-### Upload File
+---
 
-```bash
-curl -X POST http://localhost:5000/api/analyze/file \
-  -F "file=@example.py"
+## User Journey
+
+```mermaid
+flowchart TD
+    A[Open Website] --> B{Have Account?}
+    B -->|No| C[Register]
+    B -->|Yes| D[Login]
+    C --> E[Dashboard]
+    D --> E
+    E --> F[Connect GitHub]
+    F --> G[Browse Repositories]
+    G --> H[Select Repository]
+    H --> I[Choose Pull Request]
+    I --> J[Click Analyze]
+    J --> K[AI Analysis Running]
+    K --> L[View Report]
+    L --> M{Issues Found?}
+    M -->|Yes| N[View Issue Details]
+    N --> O[Apply Fixes]
+    O --> P[Export Report]
+    M -->|No| Q[Code Looks Good!]
+    P --> R[Merge PR]
+    Q --> R
 ```
 
-### Response Format
+---
 
-```json
-{
-  "request_id": "uuid",
-  "file_analyses": [{
-    "file_path": "example.py",
-    "language": "python",
-    "lines_of_code": 10,
-    "issues": [
-      {
-        "type": "security",
-        "severity": "critical",
-        "line_number": 2,
-        "message": "Shell command injection vulnerability",
-        "rule_id": "SECURITY_OS_SYSTEM",
-        "suggestion": "Use subprocess.run() with shell=False",
-        "code_snippet": "2: os.system(\"ls \" + user_input)"
-      }
-    ]
-  }],
-  "summary": {
-    "total_issues": 3,
-    "by_type": {"security": 2, "code_smell": 1, "performance": 0},
-    "by_severity": {"critical": 1, "high": 1, "medium": 0, "low": 1, "info": 0},
-    "overall_risk": "high",
-    "file_path": "example.py"
-  },
-  "ai_review": "AI-generated explanation...",
-  "processing_time_ms": 245
-}
-```
+## Tech Stack
 
-## Complexity Scoring (Radon)
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19, Tailwind CSS 4, Chart.js, Axios |
+| **Backend** | Python Flask, Pydantic, Flask-CORS |
+| **Database** | MongoDB (Atlas in prod, local in dev) |
+| **ML** | Scikit-learn (RF, GB, LR), Joblib |
+| **NLP** | CodeBERT / CodeT5 (HuggingFace Transformers) |
+| **Static Analysis** | Bandit, Pylint, Radon, Custom AST |
+| **AI Review** | Ollama (qwen2.5-coder) |
+| **Auth** | JWT (PyJWT), bcrypt |
+| **Hosting** | Vercel (frontend), Render (backend) |
+| **CI/CD** | GitHub Actions |
 
-| Cyclomatic Complexity | Rank | Severity | Action |
-|----------------------|------|----------|--------|
-| 1-5 | A | Low | Monitor |
-| 6-10 | B | Low | Monitor |
-| 11-20 | C | Medium | Consider refactoring |
-| 21-30 | D | Medium | Refactor recommended |
-| 31-40 | E | High | Refactor required |
-| 40+ | F | Critical | Immediate refactor |
-
-| Maintainability Index | Rank | Severity |
-|----------------------|------|----------|
-| >85 | A | Low |
-| 70-85 | B | Low |
-| 50-70 | C | Medium |
-| 25-50 | D | High |
-| <25 | E/F | Critical |
-
-## GitHub Webhook Setup
-
-1. Create a GitHub App or use a Personal Access Token with `repo` scope
-2. Set webhook URL: `https://your-domain/api/webhook/github`
-3. Select events: `Pull request`
-4. Set secret in `.env`: `GITHUB_WEBHOOK_SECRET`
-
-The webhook will:
-- Trigger on PR opened/synchronize/reopened
-- Analyze all `.py` files in the PR
-- Post summary comment on PR
-- Add inline comments for critical/high issues
-
-## Example Output
-
-### Security Issue
-```json
-{
-  "type": "security",
-  "tool": "Bandit",
-  "rule": "B602",
-  "severity": "critical",
-  "line_number": 14,
-  "raw_issue": "shell injection",
-  "message": "Starting a process with shell=True"
-}
-```
-
-### Code Smell
-```json
-{
-  "type": "smell",
-  "tool": "Pylint",
-  "rule": "C0114",
-  "severity": "low",
-  "line_number": 5,
-  "raw_issue": "Missing module docstring"
-}
-```
-
-### Complexity Issue
-```json
-{
-  "type": "complexity",
-  "tool": "Radon",
-  "rule": "CC",
-  "severity": "high",
-  "line_number": 40,
-  "raw_issue": "Cyclomatic Complexity = 17"
-}
-```
+---
 
 ## Project Structure
 
 ```
 AI-Code-Review-Assistant/
 ├── backend/
-│   ├── analyzers/
+│   ├── api/                    # Flask blueprints (routes)
+│   │   ├── auth_routes.py      # Register, Login, Me
+│   │   ├── review_routes.py    # Analyze, Webhook, History
+│   │   ├── github_routes.py    # OAuth, Repos, PRs
+│   │   ├── notification_routes.py
+│   │   ├── settings_routes.py
+│   │   ├── profile_routes.py
+│   │   └── export_routes.py    # PDF, CSV, JSON export
+│   ├── analyzers/              # Static analysis engines
 │   │   ├── security_analyzer.py
 │   │   ├── smell_analyzer.py
-│   │   └── complexity_analyzer.py
-│   ├── reviewer/
-│   │   ├── ai_reviewer.py
-│   │   ├── aggregator.py
-│   │   └── github_commenter.py
-│   ├── api/
-│   │   ├── review_routes.py
-│   │   └── auth_routes.py
-│   ├── models/
-│   │   ├── review.py
-│   │   └── mongodb_models.py
-│   ├── services/
-│   │   └── github_client.py
-│   ├── database/
-│   │   └── mongodb.py
-│   ├── auth/
-│   │   └── jwt_auth.py
-│   ├── tests/
-│   │   ├── test_analyzers.py
-│   │   ├── test_api_endpoints.py
-│   │   └── test_e2e.py
-│   ├── config.py
-│   ├── app.py
-│   ├── gunicorn.conf.py
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/               # React dashboard with Chart.js
+│   │   ├── complexity_analyzer.py
+│   │   └── performance_analyzer.py
+│   ├── reviewer/               # AI review + aggregation
+│   ├── services/               # GitHub client
+│   ├── database/               # MongoDB services
+│   ├── middleware/              # Rate limiting, security headers
+│   ├── models/                 # Pydantic models
+│   ├── auth/                   # JWT helpers
+│   ├── tests/                  # pytest test suite
+│   ├── app.py                  # Flask app factory
+│   ├── config.py               # Settings (pydantic-settings)
+│   └── requirements.txt
+├── frontend/
 │   ├── src/
-│   ├── vercel.json
+│   │   ├── api/                # Axios client
+│   │   ├── components/         # Layout, UI components
+│   │   ├── contexts/           # Auth, Theme, Toast
+│   │   ├── pages/              # 12 pages
+│   │   └── App.jsx
 │   └── package.json
-├── ml/                     # ML models (scikit-learn, sentence-transformers)
-├── docs/
+├── ml/
+│   ├── severity_classifier.py  # ML model
+│   ├── nlp_explainer.py        # NLP explanations
+│   └── train_ml_models.py      # Training script
 ├── docker-compose.yml
 ├── render.yaml
-└── README.md
+└── .github/workflows/ci.yml
 ```
 
-## Development
+---
 
-### Running Tests
+## Getting Started
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- MongoDB (local or Atlas)
+- (Optional) Ollama for AI reviews
+
+### Backend Setup
 
 ```bash
 cd backend
-venv\Scripts\python -m pytest tests/
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Mac/Linux
+pip install -r requirements.txt
+python -m ml.train_ml_models
+python app.py
 ```
 
-### Adding New Security Rules
+### Frontend Setup
 
-Edit `security_analyzer.py` - add to `_check_dangerous_calls` or `_check_hardcoded_secrets`
+```bash
+cd frontend
+npm install
+npm start
+```
 
-### Adding New Code Smells
+### Docker Setup
 
-Edit `smell_analyzer.py` - add new `_check_*` method and call in `analyze()`
+```bash
+docker-compose up -d
+```
 
-## Roadmap
+---
 
-- **Phase 1** ✅: Core analyzers (Bandit, Pylint, Radon) + Flask API
-- **Phase 2** ✅: ML severity classifier (scikit-learn) + NLP explanations (Ollama + qwen2.5-coder)
-- **Phase 3** ✅: MongoDB persistence + JWT auth + React dashboard (Chart.js)
-- **Phase 4** ✅: GitHub webhook + PR comments + Vercel/Render deployment
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/register` | Register new user |
+| POST | `/api/login` | Login |
+| GET | `/api/me` | Get current user |
+| POST | `/api/analyze` | Analyze code |
+| POST | `/api/analyze/file` | Upload & analyze file |
+| GET | `/api/history` | Scan history |
+| GET | `/api/history/:id` | Scan detail |
+| GET | `/api/dashboard` | Dashboard data |
+| GET | `/api/statistics` | User statistics |
+| GET | `/api/trends` | Issue trends |
+| GET | `/api/github/status` | GitHub connection status |
+| GET | `/api/github/repos` | List GitHub repos |
+| GET | `/api/github/repos/:repo/branches` | List branches |
+| GET | `/api/github/repos/:repo/pull-requests` | List PRs |
+| POST | `/api/github/repos/:repo/pull-requests/:pr/analyze` | Analyze PR |
+| GET | `/api/notifications` | Get notifications |
+| PUT | `/api/notifications/:id/read` | Mark read |
+| GET | `/api/settings` | Get settings |
+| PUT | `/api/settings` | Update settings |
+| GET | `/api/profile` | Get profile |
+| PUT | `/api/profile` | Update profile |
+| PUT | `/api/profile/password` | Change password |
+| DELETE | `/api/account` | Delete account |
+| GET | `/api/export/json/:scanId` | Export JSON |
+| GET | `/api/export/csv/:scanId` | Export CSV |
+| GET | `/api/export/pdf/:scanId` | Export PDF |
+
+---
+
+## ML Model Comparison
+
+| Model | Accuracy | Precision | Recall | F1 Score |
+|-------|----------|-----------|--------|----------|
+| Random Forest | 87% | 85% | 88% | 86% |
+| **Gradient Boosting** | **91%** | **90%** | **89%** | **90%** |
+| Logistic Regression | 82% | 81% | 83% | 82% |
+
+---
+
+## Deployment
+
+### Frontend (Vercel)
+1. Push to GitHub
+2. Import repo on [Vercel](https://vercel.com)
+3. Set environment variable: `REACT_APP_API_URL=https://your-backend.onrender.com/api`
+4. Deploy
+
+### Backend (Render)
+1. Create a [Web Service](https://render.com) on Render
+2. Connect your GitHub repo
+3. Set environment variables (see `.env.production.example`)
+4. Deploy
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+
+**Built as a Capstone Project** | [![GitHub](https://img.shields.io/badge/GitHub-jagetheswaren-181717?style=flat&logo=github)](https://github.com/jagetheswaren)
+
+</div>

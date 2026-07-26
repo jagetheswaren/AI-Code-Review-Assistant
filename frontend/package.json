@@ -3,18 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@hookform/resolvers": "^5.5.7",
+    "@monaco-editor/react": "^4.7.0",
+    "@tanstack/react-query": "^5.101.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.18.1",
     "chart.js": "^4.5.1",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^1.27.0",
     "react": "^19.2.8",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.8",
+    "react-hook-form": "^7.83.0",
     "react-router-dom": "^6.30.4",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4"
+    "react-syntax-highlighter": "^16.1.1",
+    "tailwind-merge": "^3.6.0",
+    "web-vitals": "^2.1.4",
+    "zod": "^4.4.3"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -42,9 +52,8 @@
     ]
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
     "autoprefixer": "^10.5.4",
     "postcss": "^8.5.23",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^3.4.19"
   }
 }
