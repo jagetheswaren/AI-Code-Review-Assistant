@@ -1,5 +1,11 @@
 # AI Code Review Assistant
 
+> AI-powered code review tool that performs static analysis on Python code and provides AI-generated explanations and fix suggestions.
+
+[![CI](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A comprehensive code review tool that performs static analysis on Python code using **Bandit** (security), **Pylint/astroid** (code smells), and **Radon** (complexity/performance). Provides AI-powered explanations and fix suggestions.
 
 ## Features
@@ -217,20 +223,34 @@ AI-Code-Review-Assistant/
 │   │   ├── aggregator.py
 │   │   └── github_commenter.py
 │   ├── api/
-│   │   └── review_routes.py
+│   │   ├── review_routes.py
+│   │   └── auth_routes.py
 │   ├── models/
-│   │   └── review.py
+│   │   ├── review.py
+│   │   └── mongodb_models.py
 │   ├── services/
 │   │   └── github_client.py
+│   ├── database/
+│   │   └── mongodb.py
+│   ├── auth/
+│   │   └── jwt_auth.py
 │   ├── tests/
-│   │   └── sample_complex.py
+│   │   ├── test_analyzers.py
+│   │   ├── test_api_endpoints.py
+│   │   └── test_e2e.py
 │   ├── config.py
 │   ├── app.py
+│   ├── gunicorn.conf.py
 │   ├── requirements.txt
 │   └── .env.example
-├── frontend/          # (Phase 3)
-├── ml/                # (Phase 2)
+├── frontend/               # React dashboard with Chart.js
+│   ├── src/
+│   ├── vercel.json
+│   └── package.json
+├── ml/                     # ML models (scikit-learn, sentence-transformers)
 ├── docs/
+├── docker-compose.yml
+├── render.yaml
 └── README.md
 ```
 
@@ -254,9 +274,9 @@ Edit `smell_analyzer.py` - add new `_check_*` method and call in `analyze()`
 ## Roadmap
 
 - **Phase 1** ✅: Core analyzers (Bandit, Pylint, Radon) + Flask API
-- **Phase 2** 🔄: ML severity classifier (scikit-learn) + NLP explanations (HuggingFace)
-- **Phase 3** ⏳: MongoDB Atlas persistence + JWT auth + React dashboard (Chart.js)
-- **Phase 4** ⏳: GitHub webhook + PR comments + Vercel/Render deployment
+- **Phase 2** ✅: ML severity classifier (scikit-learn) + NLP explanations (Ollama + qwen2.5-coder)
+- **Phase 3** ✅: MongoDB persistence + JWT auth + React dashboard (Chart.js)
+- **Phase 4** ✅: GitHub webhook + PR comments + Vercel/Render deployment
 
 ## License
 
