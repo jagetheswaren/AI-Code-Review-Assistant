@@ -11,3 +11,7 @@ __pycache__/
 *.py[cod]
 coverage.xml
 copilot-diagnostics-*.zip
+backend_error.log
+backend_output.log
+models/
+*.joblib
