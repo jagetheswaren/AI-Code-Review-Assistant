@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://ai-code-review-assistant.vercel.app"><strong>Live Demo</strong></a> &nbsp;&bull;&nbsp;
+  <a href="https://frontend-delta-eight-92.vercel.app"><strong>Live Demo</strong></a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/jagetheswaren/AI-Code-Review-Assistant"><strong>GitHub</strong></a>
 </p>
 
