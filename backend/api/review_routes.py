@@ -164,7 +164,7 @@ def github_webhook():
 
     webhook_secret = current_app.config.get('GITHUB_WEBHOOK_SECRET')
     if not webhook_secret:
-        return jsonify({"error": "Webhook secret not configured"}), 503
+        return jsonify({"error": "Webhook secret not configured"}), 400
 
     if not _verify_signature(payload, signature, webhook_secret):
         return jsonify({"error": "Invalid signature"}), 401

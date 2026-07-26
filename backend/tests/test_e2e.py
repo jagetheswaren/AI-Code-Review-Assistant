@@ -15,4 +15,4 @@ def test_user_can_register_analyze_and_view_dashboard(client):
 
 def test_webhook_rejects_unsigned_requests(client):
     response = client.post("/api/webhook/github", json={"action": "opened"})
-    assert response.status_code in {400, 401, 403, 503}
+    assert response.status_code in {400, 401, 403}
