@@ -3,12 +3,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 from functools import wraps
 from flask import request, jsonify, g
-import os
-
-from database.mongodb import UserService, get_db
+from config import settings
 
 
-JWT_SECRET = os.getenv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 
@@ -21,12 +18,12 @@ def create_access_token(user_id: str, email: str, username: str) -> str:
         "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
         "iat": datetime.utcnow()
     }
-    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, settings.jwt_secret, algorithm=JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
         return None

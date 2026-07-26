@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings
+from functools import cached_property
 from typing import Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -12,11 +14,30 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     jwt_secret: str = "your-super-secret-jwt-key-change-in-production"
     mongo_uri: Optional[str] = None
+    github_client_id: Optional[str] = None
+    github_client_secret: Optional[str] = None
+    github_oauth_callback_url: Optional[str] = None
+    log_level: str = "INFO"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @cached_property
+    def allowed_origins(self) -> list[str]:
+        return [origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()]
+
+    def validate_production_settings(self) -> None:
+        """Fail early for unsafe Render configuration instead of serving insecurely."""
+        if self.flask_env.lower() != "production":
+            return
+        missing = []
+        if not self.mongo_uri:
+            missing.append("MONGO_URI")
+        if not self.jwt_secret or self.jwt_secret == "your-super-secret-jwt-key-change-in-production":
+            missing.append("JWT_SECRET")
+        if not self.allowed_origins or any(origin.startswith("http://") for origin in self.allowed_origins):
+            missing.append("CORS_ORIGINS (must contain HTTPS frontend URL(s))")
+        if missing:
+            raise RuntimeError("Production configuration is incomplete: " + ", ".join(missing))
 
 
 settings = Settings()

@@ -28,7 +28,11 @@ def init_mongo(
     """
     global client, db, _database_name
     _database_name = database_name
-    client = mongo_client or MongoClient(uri or os.getenv("MONGO_URI", "mongodb://localhost:27017"))
+    client = mongo_client or MongoClient(
+        uri or os.getenv("MONGO_URI", "mongodb://localhost:27017"),
+        serverSelectionTimeoutMS=5_000,
+        connectTimeoutMS=5_000,
+    )
     db = client.get_database(_database_name)
 
     db.users.create_index("email", unique=True)

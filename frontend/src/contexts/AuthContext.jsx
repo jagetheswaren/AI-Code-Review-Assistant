@@ -30,21 +30,21 @@ export const AuthProvider = ({ children }) => {
 
   const login = useCallback(async (email, password) => {
     const response = await axios.post(`${API_BASE}/login`, { email, password });
-    const { access_token, user } = response.data;
-    localStorage.setItem('token', access_token);
-    setToken(access_token);
+    const { token, user } = response.data;
+    localStorage.setItem('token', token);
+    setToken(token);
     setUser(user);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     return response.data;
   }, []);
 
   const register = useCallback(async (username, email, password) => {
     const response = await axios.post(`${API_BASE}/register`, { username, email, password });
-    const { access_token, user } = response.data;
-    localStorage.setItem('token', access_token);
-    setToken(access_token);
+    const { token, user } = response.data;
+    localStorage.setItem('token', token);
+    setToken(token);
     setUser(user);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     return response.data;
   }, []);
 
