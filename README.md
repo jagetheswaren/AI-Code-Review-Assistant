@@ -1,12 +1,21 @@
-# AI Code Review Assistant
+<p align="center">
+  <img src="logo.svg" alt="AI Code Review Assistant" width="600">
+</p>
 
-> AI-powered code review tool that performs static analysis on Python code and provides AI-generated explanations and fix suggestions.
+<p align="center">
+  <a href="https://ai-code-review-assistant.vercel.app"><strong>Live Demo</strong></a> &nbsp;&bull;&nbsp;
+  <a href="https://github.com/jagetheswaren/AI-Code-Review-Assistant"><strong>GitHub</strong></a>
+</p>
 
-[![CI](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <img src="https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+</p>
 
-A comprehensive code review tool that performs static analysis on Python code using **Bandit** (security), **Pylint/astroid** (code smells), and **Radon** (complexity/performance). Provides AI-powered explanations and fix suggestions.
+---
+
+AI-powered code review tool that performs static analysis on Python code and provides AI-generated explanations and fix suggestions.
 
 ## Features
 
