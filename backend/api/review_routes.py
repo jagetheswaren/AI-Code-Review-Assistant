@@ -18,7 +18,7 @@ from database.mongodb import scan_service
 from services.github_client import GitHubClient, create_github_client
 from reviewer.github_commenter import GitHubCommenter
 from auth.jwt_auth import decode_token
-from ml.severity_classifier import MLSeverityClassifier
+from ml.severity_classifier import SeverityClassifier
 
 
 review_bp = Blueprint('review', __name__)
@@ -29,7 +29,7 @@ complexity_analyzer = ComplexityAnalyzer()
 performance_analyzer = PerformanceAnalyzer()
 ai_reviewer = AIReviewer()
 aggregator = FindingAggregator()
-ml_classifier = MLSeverityClassifier()
+ml_classifier = SeverityClassifier()
 ml_classifier.load()
 
 
@@ -89,10 +89,20 @@ def analyze_code():
 
         # ML severity prediction
         try:
-            ml_result = ml_classifier.predict(issue.message, issue.rule_id or "", issue.line_number)
-            if ml_result.get("model_available"):
-                issue.ml_severity = ml_result["severity"]
-                issue.ml_confidence = ml_result["confidence"]
+            ml_issue = {
+                "type": issue.type.value,
+                "severity": issue.severity.value,
+                "line_number": issue.line_number,
+                "message": issue.message,
+                "rule_id": issue.rule_id or "",
+                "suggestion": issue.suggestion,
+                "code_snippet": issue.code_snippet,
+                "explanation": issue.explanation,
+            }
+            ml_result = ml_classifier.predict([ml_issue])[0]
+            if ml_classifier.is_trained:
+                issue.ml_severity = ml_result["ml_severity"]
+                issue.ml_confidence = ml_result["ml_confidence"]
         except Exception:
             pass
 

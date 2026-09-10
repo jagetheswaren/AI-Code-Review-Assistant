@@ -1,11 +1,11 @@
 import numpy as np
-import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import classification_report, accuracy_score
 import joblib
 import os
+from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import logging
 
@@ -157,7 +157,10 @@ class SeverityClassifier:
         }, model_path)
         logger.info(f"Model saved to {model_path}")
     
-    def load(self, model_path: str = 'models/severity_classifier.joblib'):
+    def load(self, model_path: str = None):
+        if model_path is None:
+            model_path = str(Path(__file__).resolve().parents[2] / 'models' / 'severity_classifier.joblib')
+
         if not os.path.exists(model_path):
             logger.warning(f"Model file not found at {model_path}")
             return False

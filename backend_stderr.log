@@ -1,0 +1,12 @@
+2026-08-14 21:58:25,640 ERROR stevedore.extension: Could not load 'sarif': No module named 'sarif_om'
+2026-08-14 21:58:36,292 INFO ml.severity_classifier: Model loaded from C:\Users\jaget\AI-Code-Review-Assistant\models\severity_classifier.joblib
+2026-08-14 21:58:36,335 INFO werkzeug: [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.34:5000
+2026-08-14 21:58:36,336 INFO werkzeug: [33mPress CTRL+C to quit[0m
+2026-08-14 21:58:36,338 INFO werkzeug:  * Restarting with stat
+2026-08-14 21:58:37,234 ERROR stevedore.extension: Could not load 'sarif': No module named 'sarif_om'
+2026-08-14 21:58:47,901 INFO ml.severity_classifier: Model loaded from C:\Users\jaget\AI-Code-Review-Assistant\models\severity_classifier.joblib
+2026-08-14 21:58:47,929 WARNING werkzeug:  * Debugger is active!
+2026-08-14 21:58:47,935 INFO werkzeug:  * Debugger PIN: 641-451-862

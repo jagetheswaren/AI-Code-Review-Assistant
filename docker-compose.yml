@@ -1,81 +1,75 @@
 version: '3.8'
 
 services:
-  mongodb:
-    image: mongo:7
-    container_name: intellireview-mongodb
+  postgres:
+    image: postgres:15
+    container_name: ai-code-review-postgres
     ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
+      - "5432:5432"
     environment:
-      - MONGO_INITDB_DATABASE=code_review_assistant
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=code_review_assistant
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: intellireview-ollama
+  redis:
+    image: redis:7
+    container_name: ai-code-review-redis
     ports:
-      - "11434:11434"
+      - "6379:6379"
     volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0
+      - redis_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: intellireview-backend
+    container_name: ai-code-review-backend
     ports:
-      - "5000:5000"
+      - "8000:8000"
     environment:
-      - FLASK_ENV=development
-      - MONGO_URI=mongodb://mongodb:27017/code_review_assistant
-      - JWT_SECRET=dev-secret-change-in-production
-      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-}
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
-      - GITHUB_OAUTH_CALLBACK_URL=http://localhost:5000/api/github/oauth/callback
-      - OLLAMA_MODEL=qwen2.5-coder:3b
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - CORS_ORIGINS=http://localhost:3000
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/code_review_assistant
+      - REDIS_URL=redis://redis:6379/0
+      - FRONTEND_URL=http://localhost:3000
     volumes:
       - ./backend:/app
-      - ./ml:/app/ml
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
-      ollama:
+      redis:
         condition: service_healthy
-    command: gunicorn --config gunicorn.conf.py app:app
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: intellireview-frontend
+    container_name: ai-code-review-frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
     environment:
-      - REACT_APP_API_URL=http://localhost:5000/api
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     depends_on:
       - backend
 
 volumes:
-  mongodb_data:
-  ollama_data:
+  postgres_data:
+  redis_data:
 
 networks:
   default:
-    name: intellireview-network
+    name: ai-code-review-network
