@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     ml_model_path: str = "ml/ml_model.pkl"
     nlp_model_name: str = "microsoft/codebert-base"
+    groq_api_key: Optional[str] = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

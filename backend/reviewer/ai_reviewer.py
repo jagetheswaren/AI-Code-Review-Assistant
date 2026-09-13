@@ -26,12 +26,27 @@ class AIReviewer:
         # ollama.Client expects host without trailing slash
         self.client = ollama.Client(host=self.base_url)
         self.nlp_explainer = create_explainer()
+        
+        # Groq Fallback setup
+        self.groq_api_key = settings.groq_api_key
+        self.groq_client = None
+        self.groq_model = "llama-3.3-70b-versatile"
+        if self.groq_api_key:
+            try:
+                from groq import Groq
+                self.groq_client = Groq(api_key=self.groq_api_key)
+                self.model = self.groq_model # Override default model string for status checks
+            except ImportError:
+                logger.warning("Groq SDK not installed. Fallback unavailable.")
 
     # ------------------------------------------------------------------
     # Connectivity helpers
     # ------------------------------------------------------------------
     def check_health(self) -> Dict[str, Any]:
-        """Probe Ollama /api/tags. Returns {reachable, models, error}."""
+        """Probe Ollama /api/tags or Groq. Returns {reachable, models, error}."""
+        if self.groq_client:
+            return {"reachable": True, "models": [self.groq_model], "error": None}
+            
         if not self.base_url or not self.base_url.strip():
             return {"reachable": False, "models": [], "error": "OLLAMA_BASE_URL not configured (empty). Production AI BLOCKED."}
         # Production localhost guard: Render cannot reach laptop localhost
@@ -52,6 +67,9 @@ class AIReviewer:
             return {"reachable": False, "models": [], "error": msg}
 
     def is_model_available(self) -> Tuple[bool, str]:
+        if self.groq_client:
+            return True, ""
+            
         health = self.check_health()
         if not health["reachable"]:
             return False, f"Ollama unreachable: {health['error']}"
@@ -202,6 +220,23 @@ Provide a 2-3 sentence executive summary highlighting the most critical issues a
     def _query_llm(self, prompt: str, json_mode: bool = False, timeout: Optional[int] = None) -> str:
         """Low-level chat call with timeout. Never raises; returns string or error message."""
         effective_timeout = timeout or self.timeout
+        
+        # If Groq is configured, use it (primary for Cloud)
+        if self.groq_client:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model=self.groq_model,
+                    response_format={"type": "json_object"} if json_mode else {"type": "text"},
+                    temperature=0.3
+                )
+                content = response.choices[0].message.content
+                if content:
+                    return content.strip()
+            except Exception as e:
+                return f"AI review unavailable: Groq API error ({e})"
+
+        # Fallback to Ollama (primary for Local)
         if not self.base_url or not self.base_url.strip():
             return "AI review unavailable: OLLAMA_BASE_URL not configured"
         # Production localhost guard
