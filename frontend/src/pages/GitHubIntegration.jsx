@@ -12,7 +12,7 @@ import {
   Key,
 } from 'lucide-react';
 import { GithubIcon } from '../lib/utils';
-import { getGitHubStatus, getGitHubRepos, connectGitHubPAT, disconnectGitHub } from '../api/client';
+import { getGitHubStatus, getGitHubRepos, connectGitHubPAT, disconnectGitHub, getGitHubOAuthUrl } from '../api/client';
 import { useToast } from '../contexts/ToastContext';
 import {
   Button,
@@ -231,9 +231,17 @@ export default function GitHubIntegration() {
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <Button
-                    onClick={() => {
-                      const token = localStorage.getItem('token');
-                      window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/github/oauth/authorize?token=${token}`;
+                    onClick={async () => {
+                      try {
+                        const data = await getGitHubOAuthUrl();
+                        window.location.href = data.auth_url;
+                      } catch (err) {
+                        toast({ 
+                          title: 'OAuth Initialization failed', 
+                          description: err.response?.data?.error || err.message, 
+                          variant: 'error' 
+                        });
+                      }
                     }}
                     className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-8 py-3 shadow-lg shadow-indigo-500/25"
                   >

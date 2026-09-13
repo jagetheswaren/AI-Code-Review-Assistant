@@ -70,6 +70,9 @@ export const refreshToken = () =>
 export const getGitHubStatus = () =>
   api.get('/github/status');
 
+export const getGitHubOAuthUrl = () =>
+  api.get('/github/oauth/authorize').then(res => res.data);
+
 export const getGitHubRepos = () =>
   api.get('/github/repos');
 

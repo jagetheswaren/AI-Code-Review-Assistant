@@ -84,3 +84,41 @@ def test_github_webhook_valid_signature_success(mock_thread, client, monkeypatch
         assert response.status_code == 202
         assert response.json["message"] == "Processing started"
         mock_thread.assert_called_once()
+
+# --- OAuth Tests ---
+
+def test_oauth_authorize_no_auth_header(client):
+    response = client.get('/api/github/oauth/authorize')
+    assert response.status_code == 401
+    assert response.json["error"] == "Authentication required"
+
+@patch('api.github_routes.decode_token')
+def test_oauth_authorize_valid_token(mock_decode, client):
+    client.application.config["GITHUB_CLIENT_ID"] = "test-client-id"
+    mock_decode.return_value = {"user_id": "test-user-id"}
+    
+    response = client.get('/api/github/oauth/authorize', headers={"Authorization": "Bearer fake-jwt-token"})
+    assert response.status_code == 200
+    data = response.json
+    assert "auth_url" in data
+    assert "state" in data
+    # Ensure JWT is NOT present in the returned URL
+    assert "fake-jwt-token" not in data["auth_url"]
+    assert "client_id=test-client-id" in data["auth_url"]
+
+@patch('api.github_routes.decode_token')
+def test_oauth_authorize_pat_still_works(mock_decode, client):
+    mock_decode.return_value = {"user_id": "test-user-id"}
+    with patch('api.github_routes.http_requests.get') as mock_get:
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: {"id": 12345, "login": "test-user"})
+        with patch('database.mongodb.user_service.update_user') as mock_update:
+            response = client.post('/api/github/pat/connect', json={"token": "ghp_fake_token"}, headers={"Authorization": "Bearer fake-jwt-token"})
+            assert response.status_code == 200
+            assert response.json["message"] == "GitHub connected successfully"
+            mock_update.assert_called_once()
+
+def test_oauth_callback_invalid_state(client):
+    # Missing session state
+    response = client.get('/api/github/oauth/callback?code=fake-code&state=fake-state')
+    assert response.status_code == 400
+    assert response.json["error"] == "Invalid OAuth state"
