@@ -33,6 +33,8 @@ class Issue(BaseModel):
     fix_suggestion: Optional[str] = None
     ml_severity: Optional[str] = None
     ml_confidence: Optional[float] = None
+    ml_model_version: Optional[str] = None
+    source: List[str] = Field(default_factory=list)
 
 
 class FileAnalysis(BaseModel):

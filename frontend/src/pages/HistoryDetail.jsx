@@ -20,7 +20,8 @@ export default function HistoryDetail() {
   async function loadDetail() {
     setLoading(true);
     try {
-      const data = await getScanDetail(id);
+      const res = await getScanDetail(id);
+      const data = res.data || res;
       setDetail(data);
     } catch {
       setDetail(null);
@@ -31,23 +32,26 @@ export default function HistoryDetail() {
 
   async function handleExport(type) {
     try {
-      let blob;
-      let filename = `report-${id}`;
+      let res;
+      let filename = `report-${String(id).slice(0,8)}`;
       if (type === 'json') {
-        blob = await exportJSON(id);
+        res = await exportJSON(id);
         filename += '.json';
       } else if (type === 'csv') {
-        blob = await exportCSV(id);
+        res = await exportCSV(id);
         filename += '.csv';
       } else {
-        blob = await exportPDF(id);
+        res = await exportPDF(id);
         filename += '.pdf';
       }
-      const url = URL.createObjectURL(blob);
+      const blob = res.data || res;
+      const url = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]));
       const a = document.createElement('a');
       a.href = url;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       URL.revokeObjectURL(url);
     } catch {}
   }
@@ -61,12 +65,19 @@ export default function HistoryDetail() {
   if (loading) return <PageLoader />;
   if (!detail) return <EmptyState icon={AlertTriangle} title="Report not found" description="This scan report could not be loaded." />;
 
-  const issuesByFile = detail.issues_by_file || {};
   const summary = detail.summary || {};
   const totalIssues = summary.total_issues || 0;
-  const securityCount = summary.security || 0;
-  const codeSmellCount = summary.code_smells || 0;
-  const performanceCount = summary.performance || 0;
+  const securityCount = summary.by_type?.security || 0;
+  const codeSmellCount = summary.by_type?.code_smell || 0;
+  const performanceCount = summary.by_type?.performance || 0;
+
+  // Group file_analyses into issues_by_file
+  const issuesByFile = {};
+  if (detail.file_analyses) {
+    detail.file_analyses.forEach(fa => {
+      issuesByFile[fa.file_path] = fa.issues;
+    });
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -162,8 +173,17 @@ export default function HistoryDetail() {
                       Line {issue.line_number}
                     </span>
                     <Badge variant="outline" className="border-white/[0.06] text-xs text-slate-400">
-                      {issue.category}
+                      {issue.type || issue.category}
                     </Badge>
+                    {issue.source && issue.source.length > 0 && (
+                      <div className="flex gap-1 ml-auto">
+                        {issue.source.map((src, i) => (
+                          <Badge key={i} className="text-[10px] uppercase bg-white/5 text-slate-400 border-white/10">
+                            {src}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <p className="text-sm text-white">{issue.message}</p>
                   {issue.suggestion && (

@@ -1,415 +1,373 @@
-# Architecture Documentation
+# IntelliReview AI — Complete Project Architecture
 
-## System Overview
+## 1. What is IntelliReview AI?
 
-The AI Code Review Assistant is a full-stack web application that provides automated code review capabilities using machine learning and static analysis. The architecture follows a modern microservices-inspired pattern with clear separation of concerns.
+**IntelliReview AI** is an AI-powered code review platform.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                            │
-│  ┌──────────┬──────────┬──────────┬──────────┬──────────────────┐  │
-│  │Dashboard │ History  │ Profile  │Settings  │GitHubIntegration │  │
-│  └──────────┴──────────┴──────────┴──────────┴──────────────────┘  │
-│  ┌──────────────────────────────────────┐                          │
-│  │  API Client (Axios) + Auth Context   │                          │
-│  └──────────────────────────────────────┘                          │
-└─────────────────────────────────────────────────────────────────────┘
-                            ↓ HTTP/REST
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Backend (Flask + Python)                         │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                    Flask Application                           │ │
-│  │  ┌──────────────────────────────────────────────────────────┐ │ │
-│  │  │              API Routes                                  │ │ │
-│  │  │  • /api/analyze      - Code analysis                     │ │ │
-│  │  │  • /api/register     - User registration                 │ │ │
-│  │  │  • /api/login        - User authentication               │ │ │
-│  │  │  • /api/history      - Scan history                      │ │ │
-│  │  │  • /api/dashboard    - User dashboard                    │ │ │
-│  │  │  • /webhook/github   - GitHub webhook handler            │ │ │
-│  │  └──────────────────────────────────────────────────────────┘ │ │
-│  ├────────────────────────────────────────────────────────────────┤ │
-│  │  ┌──────────────────────────────────────────────────────────┐  │ │
-│  │  │            Core Analysis Modules                         │  │ │
-│  │  │  ┌─────────────────────────────────────────────────────┐ │  │ │
-│  │  │  │ Security Analyzer (Bandit + Custom AST)            │ │  │ │
-│  │  │  │  • Hardcoded secrets                               │ │  │ │
-│  │  │  │  • SQL injection patterns                          │ │  │ │
-│  │  │  │  • Command injection                               │ │  │ │
-│  │  │  └─────────────────────────────────────────────────────┘ │  │ │
-│  │  │  ┌─────────────────────────────────────────────────────┐ │  │ │
-│  │  │  │ Smell Analyzer (Pylint + Astroid)                  │ │  │ │
-│  │  │  │  • Unused variables                                │ │  │ │
-│  │  │  │  • Long functions                                  │ │  │ │
-│  │  │  │  • Complex conditionals                            │ │  │ │
-│  │  │  │  • Naming violations                               │ │  │ │
-│  │  │  └─────────────────────────────────────────────────────┘ │  │ │
-│  │  │  ┌─────────────────────────────────────────────────────┐ │  │ │
-│  │  │  │ Complexity Analyzer (Radon)                        │ │  │ │
-│  │  │  │  • Cyclomatic complexity                           │ │  │ │
-│  │  │  │  • Maintainability index                           │ │  │ │
-│  │  │  │  • Halstead metrics                                │ │  │ │
-│  │  │  └─────────────────────────────────────────────────────┘ │  │ │
-│  │  └──────────────────────────────────────────────────────────┘  │ │
-│  ├────────────────────────────────────────────────────────────────┤ │
-│  │  ┌──────────────────────────────────────────────────────────┐  │ │
-│  │  │            ML & NLP Enhancement                         │  │ │
-│  │  │  ┌─────────────────────────────────────────────────────┐ │  │ │
-│  │  │  │ Severity Classifier (Random Forest)                │ │  │ │
-│  │  │  │  • Feature extraction from issues                  │ │  │ │
-│  │  │  │  • Severity level prediction                       │ │  │ │
-│  │  │  │  • Confidence scoring                              │ │  │ │
-│  │  │  └─────────────────────────────────────────────────────┘ │  │ │
-│  │  │  ┌─────────────────────────────────────────────────────┐ │  │ │
-│  │  │  │ NLP Explainer (CodeGPT)                            │ │  │ │
-│  │  │  │  • Issue explanation generation                    │ │  │ │
-│  │  │  │  • Fix suggestion generation                       │ │  │ │
-│  │  │  │  • Fallback explanations                           │ │  │ │
-│  │  │  └─────────────────────────────────────────────────────┘ │  │ │
-│  │  └──────────────────────────────────────────────────────────┘  │ │
-│  ├────────────────────────────────────────────────────────────────┤ │
-│  │  ┌──────────────────────────────────────────────────────────┐  │ │
-│  │  │          GitHub Integration                            │  │ │
-│  │  │  • Webhook handler                                      │  │ │
-│  │  │  • PR comment posting                                   │  │ │
-│  │  │  • File download & analysis                             │  │ │
-│  │  └──────────────────────────────────────────────────────────┘  │ │
-│  ├────────────────────────────────────────────────────────────────┤ │
-│  │  ┌──────────────────────────────────────────────────────────┐  │ │
-│  │  │          Authentication & Authorization                 │  │ │
-│  │  │  • JWT token generation/validation                      │  │ │
-│  │  │  • bcrypt password hashing                              │  │ │
-│  │  │  • Protected route middleware                           │  │ │
-│  │  └──────────────────────────────────────────────────────────┘  │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-                            ↓ MongoDB Protocol
-┌─────────────────────────────────────────────────────────────────────┐
-│                  MongoDB Atlas Database                             │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │ Collections:                                                 │  │
-│  │  • users         - User accounts & credentials              │  │
-│  │  • scans         - Code analysis results                    │  │
-│  │  • settings      - User preferences                         │  │
-│  │  • notifications - Notification history                     │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
+A user can:
+* Register/login
+* Submit source code
+* Upload code files
+* Analyze security vulnerabilities
+* Detect code smells
+* Detect performance problems
+* Calculate code complexity
+* Predict issue severity using ML
+* Generate AI explanations using Ollama
+* View results on a dashboard
+* View previous reviews
+* Export reports as JSON/CSV/PDF
+* Connect GitHub
+* Select repositories
+* Analyze pull requests
+* Automatically comment review results on GitHub PRs
+* Trigger automatic reviews through GitHub webhooks
 
-                    ↓ GitHub REST API
-                    ↓ Webhook Events
-┌─────────────────────────────────────────────────────────────────────┐
-│                      GitHub                                         │
-│  • Repository access                                               │
-│  • Pull request analysis                                           │
-│  • Webhook events                                                  │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-## Component Details
-
-### 1. Frontend (React)
-
-**Technology:**
-- React 19
-- React Router 7
-- Tailwind CSS
-- Axios (HTTP Client)
-- Chart.js (Visualization)
-
-**Key Components:**
-- `App.jsx` - Main app shell with routing
-- `Dashboard.jsx` - Code input and analysis interface
-- `History.jsx` - Scan history with pagination
-- `HistoryDetail.jsx` - Detailed scan results
-- `Profile.jsx` - User profile and statistics
-- `Settings.jsx` - User preferences
-- `GitHubIntegration.jsx` - GitHub setup guide
-
-**Contexts:**
-- `AuthContext` - User authentication state
-
-**API Client:**
-- `client.js` - Axios instance with interceptors
-
----
-
-### 2. Backend (Flask)
-
-**Technology:**
-- Flask 3.0
-- Python 3.11+
-- MongoDB + PyMongo
-- JWT for authentication
-- bcrypt for password hashing
-
-**Core Modules:**
-
-#### API Routes (`api/`)
-- `auth_routes.py` - Register, login, token refresh
-- `review_routes.py` - Code analysis endpoints
-
-#### Analyzers (`analyzers/`)
-- `security_analyzer.py` - Bandit + custom AST analysis
-- `smell_analyzer.py` - Pylint/astroid code quality checks
-- `complexity_analyzer.py` - Radon complexity metrics
-
-#### ML/NLP (`ml/`)
-- `severity_classifier.py` - Random Forest severity prediction
-- `nlp_explainer.py` - CodeGPT explanation generation
-
-#### Database (`database/`)
-- `mongodb.py` - MongoDB connection & services
-  - `UserService` - User CRUD operations
-  - `ScanService` - Scan history management
-
-#### Services (`services/`)
-- `github_client.py` - GitHub REST API client
-
-#### Reviewer (`reviewer/`)
-- `ai_reviewer.py` - Analysis result enhancement
-- `aggregator.py` - Finding deduplication
-- `github_commenter.py` - PR comment formatting
-
-#### Authentication (`auth/`)
-- `jwt_auth.py` - JWT token handling
-
----
-
-### 3. Database (MongoDB)
-
-**Collections:**
-
-#### users
-```javascript
-{
-  _id: ObjectId,
-  username: String (unique),
-  email: String (unique),
-  password_hash: String,
-  created_at: Date,
-  last_login: Date,
-  is_active: Boolean
-}
-```
-
-#### scans
-```javascript
-{
-  _id: ObjectId,
-  user_id: ObjectId,
-  request_id: String (unique),
-  timestamp: Date,
-  file_analyses: [
-    {
-      file_path: String,
-      language: String,
-      lines_of_code: Number,
-      issues: [
-        {
-          type: String,
-          severity: String,
-          line_number: Number,
-          message: String,
-          rule_id: String,
-          explanation: String,
-          fix_suggestion: String,
-          ml_severity: String,
-          ml_confidence: Number
-        }
-      ]
-    }
-  ],
-  summary: {
-    total_issues: Number,
-    by_type: Object,
-    by_severity: Object,
-    overall_risk: String,
-    file_path: String
-  },
-  ai_review: String,
-  github_pr_url: String,
-  github_pr_number: Number,
-  github_repo: String,
-  processing_time_ms: Number
-}
+The core idea is:
+```text
+Developer
+   ↓
+Submit Code / GitHub PR
+   ↓
+IntelliReview AI
+   ↓
+Static Analysis
+   ↓
+Machine Learning
+   ↓
+AI Explanation
+   ↓
+Store Results
+   ↓
+Display Results
+   ↓
+Optional GitHub PR Comment
 ```
 
 ---
 
-## Data Flow
+## 2. Complete Architecture
 
-### Code Analysis Flow
+```text
+                         ┌──────────────────────┐
+                         │       USER           │
+                         │ Developer / Student  │
+                         └──────────┬───────────┘
+                                    │
+                                    ▼
+                    ┌──────────────────────────────┐
+                    │       React 19 Frontend      │
+                    │                              │
+                    │ Tailwind CSS                 │
+                    │ React Router                 │
+                    │ Axios                        │
+                    │ Chart.js                     │
+                    │ Monaco Editor                │
+                    └──────────────┬───────────────┘
+                                   │
+                              HTTP/HTTPS
+                                   │
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │       Flask REST API         │
+                    │                              │
+                    │ Authentication               │
+                    │ JWT                          │
+                    │ CORS                         │
+                    │ Security Headers             │
+                    │ Review API                   │
+                    │ GitHub API                   │
+                    │ Export API                   │
+                    └──────────────┬───────────────┘
+                                   │
+                  ┌────────────────┼────────────────┐
+                  │                │                │
+                  ▼                ▼                ▼
+          ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+          │ Static       │ │ ML Severity  │ │   Ollama     │
+          │ Analysis     │ │ Classifier   │ │ AI Reviewer  │
+          └──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+                 │                │                │
+                 └────────────────┼────────────────┘
+                                  ▼
+                       ┌────────────────────┐
+                       │ Finding Aggregator │
+                       └─────────┬──────────┘
+                                 │
+                                 ▼
+                       ┌────────────────────┐
+                       │   MongoDB Atlas    │
+                       │                    │
+                       │ Users              │
+                       │ Scans              │
+                       │ Findings           │
+                       │ History            │
+                       └─────────┬──────────┘
+                                 │
+                                 ▼
+                       ┌────────────────────┐
+                       │ React Dashboard    │
+                       └────────────────────┘
 
+
+GitHub
+   │
+   ├── OAuth
+   │
+   ├── Repository API
+   │
+   ├── Pull Request API
+   │
+   └── Webhook
+          │
+          ▼
+     Flask API
+          │
+          ▼
+     Review Pipeline
+          │
+          ▼
+     GitHub PR Comment
 ```
-1. User Input
-   ↓
-2. Frontend: Send code → Backend /api/analyze
-   ↓
-3. Backend: Authenticate user (JWT)
-   ↓
-4. Security Analysis (Bandit)
-   ↓
-5. Code Smell Detection (Pylint/Astroid)
-   ↓
-6. Complexity Analysis (Radon)
-   ↓
-7. ML Severity Classification
-   ↓
-8. NLP Explanation Generation
-   ↓
-9. Result Aggregation & Deduplication
-   ↓
-10. Save to MongoDB
-   ↓
-11. Return to Frontend
-   ↓
-12. Frontend: Display results with visualizations
+
+---
+
+## 3. Technology Stack
+
+| Layer | Technology | Purpose |
+| --- | --- | --- |
+| Frontend | React 19 | User interface |
+| Styling | Tailwind CSS | UI styling |
+| Routing | React Router | Page navigation |
+| HTTP | Axios | Frontend → backend communication |
+| Charts | Chart.js | Dashboard visualization |
+| Editor | Monaco Editor | Code editing/viewing |
+| Backend | Python | Application logic |
+| API | Flask 3 | REST API |
+| Authentication | JWT | Login/session authentication |
+| Password security | bcrypt | Password hashing |
+| CORS | Flask-CORS | Frontend/backend communication |
+| Database | MongoDB Atlas | Persistent storage |
+| DB driver | PyMongo | Python → MongoDB |
+| Security analysis | Bandit | Python security vulnerabilities |
+| Code analysis | AST/astroid | Code smells/structure |
+| Complexity | Radon | Cyclomatic complexity |
+| Performance | Custom AST analysis | Performance patterns |
+| ML | scikit-learn | Severity prediction |
+| Model storage | joblib | Save/load ML model |
+| AI | Ollama | AI explanation |
+| AI model | qwen2.5-coder:3b | Code explanation |
+| GitHub | GitHub REST API | Repository/PR integration |
+| OAuth | GitHub OAuth | GitHub authentication |
+| Webhook | GitHub Webhooks | Automatic PR reviews |
+| Security | HMAC SHA-256 | Webhook verification |
+| PDF | ReportLab | PDF reports |
+| Testing | pytest | Backend tests |
+| Testing | frontend test setup | Frontend tests |
+| Mock DB | mongomock | Automated DB tests |
+| Frontend hosting | Vercel | React deployment |
+| Backend hosting | Render | Flask deployment |
+| Database hosting | MongoDB Atlas | Cloud database |
+| AI runtime | Ollama | Local/remote AI inference |
+
+---
+
+## 4. Frontend Architecture
+
+The React frontend is the presentation layer. Conceptually:
+
+```text
+frontend/
+│
+├── src/
+│   ├── pages/
+│   │   ├── Login.jsx
+│   │   ├── Register.jsx
+│   │   ├── Dashboard.jsx
+│   │   ├── Review.jsx
+│   │   ├── History.jsx
+│   │   ├── HistoryDetail.jsx
+│   │   ├── Reports.jsx
+│   │   ├── Security.jsx
+│   │   ├── Quality.jsx
+│   │   ├── Performance.jsx
+│   │   ├── GitHubIntegration.jsx
+│   │   ├── Repository.jsx
+│   │   └── PullRequest.jsx
+│   │
+│   ├── api/
+│   │   └── client.js
+│   │
+│   ├── components/
+│   │
+│   ├── App.js
+│   └── ...
 ```
 
-### GitHub Webhook Flow
+---
 
-```
-1. Developer creates/updates Pull Request
-   ↓
-2. GitHub sends webhook event
-   ↓
-3. Backend receives webhook (signature verification)
-   ↓
-4. Fetch PR files from GitHub
-   ↓
-5. Analyze each Python file
-   ↓
-6. Generate comments
-   ↓
-7. Post PR review comments on GitHub
-   ↓
-8. Save results to MongoDB
+## 5. React → Flask Connection
+
+The frontend does not directly talk to MongoDB. It works like this:
+
+```text
+React
+  │
+  │ Axios
+  ▼
+Flask API
+  │
+  ▼
+MongoDB
 ```
 
----
-
-## Security Measures
-
-1. **Authentication**
-   - JWT tokens with expiration
-   - Bcrypt password hashing
-   - Protected routes with middleware
-
-2. **API Security**
-   - CORS enabled for trusted origins
-   - Request validation and sanitization
-   - GitHub webhook signature verification
-
-3. **Database Security**
-   - MongoDB Atlas with SSL/TLS
-   - Unique indexes on sensitive fields
-   - User data isolation
-
-4. **Code Analysis**
-   - AST-based analysis (safe)
-   - No code execution
-   - Sandboxed analysis environment
+The browser never receives `MONGO_URI`, `GITHUB_TOKEN`, `GITHUB_CLIENT_SECRET`, or `JWT_SECRET`. These remain backend secrets.
 
 ---
 
-## Deployment Architecture
+## 6. Centralized Axios Client
 
-### Frontend (Vercel)
-- Git-based CI/CD
-- Automatic deployments on push
-- Global CDN distribution
-- Environment variables for API URL
+The `frontend/src/api/client.js` is critical. Instead of every page manually configuring URLs, it provides centralized API communication.
 
-### Backend (Render)
-- Docker-based deployment
-- Automatic builds from GitHub
-- Environment variables for secrets
-- PostgreSQL-ready (if needed)
+```text
+Dashboard.jsx
+       │
+History.jsx ──────┐
+Review.jsx ───────┤
+Reports.jsx ──────┤
+GitHub.jsx ───────┤
+                  ▼
+             api/client.js
+                  │
+                  ▼
+             Flask Backend
+```
 
-### Database (MongoDB Atlas)
-- Free M0 tier for development
-- Paid tiers for production
-- Automatic backups
-- Network access controls
-
----
-
-## Performance Considerations
-
-1. **Code Analysis**
-   - Parallel analysis of multiple files
-   - ML model caching
-   - NLP explanation caching
-
-2. **Database Queries**
-   - Indexed user_id + timestamp for history
-   - Request_id index for lookups
-   - Pagination for large result sets
-
-3. **Frontend Optimization**
-   - Code splitting with React Router
-   - Lazy loading of charts
-   - CSS-in-JS for optimized styling
+This makes changing `localhost → Render` much easier for deployment.
 
 ---
 
-## Scalability
+## 7. Review Pipeline
 
-1. **Horizontal Scaling**
-   - Stateless Flask app (multiple instances)
-   - Load balancer (Render, AWS ELB)
-   - MongoDB scaling with sharding
+This is the **heart of the project**.
 
-2. **Caching**
-   - Redis for ML model caching (future)
-   - Browser caching for static assets
-   - API response caching
-
-3. **Queue System** (Future)
-   - Celery for background analysis jobs
-   - RabbitMQ for message queue
-   - Async webhook processing
+```text
+Source Code
+     ↓
+┌─────────────────────┐
+│ Security Analysis   │
+│ Bandit              │
+└──────────┬──────────┘
+           │
+┌──────────▼──────────┐
+│ Code Smell Analysis │
+│ AST / astroid       │
+└──────────┬──────────┘
+           │
+┌──────────▼──────────┐
+│ Performance         │
+│ AST patterns        │
+└──────────┬──────────┘
+           │
+┌──────────▼──────────┐
+│ Complexity          │
+│ Radon               │
+└──────────┬──────────┘
+           │
+           ▼
+   FindingAggregator
+           │
+           ▼
+     ML Severity
+           │
+           ▼
+       Ollama
+           │
+           ▼
+     Final Findings
+           │
+           ▼
+       MongoDB
+```
 
 ---
 
-## Monitoring & Logging
+## 8. Why ML is separate from static analysis
 
-1. **Application Logging**
-   - Python logging to file/console
-   - Frontend error logging (Sentry integration)
-   - Request/response logging
+Static analyzers detect: *"What problem exists?"*
+ML predicts: *"How severe is this problem likely to be?"*
+AI explains: *"What does this mean and how should the developer understand it?"*
 
-2. **Database Monitoring**
-   - MongoDB Atlas monitoring
-   - Query performance metrics
-   - Storage usage tracking
-
-3. **Deployment Monitoring**
-   - Render deployment logs
-   - Vercel build logs
-   - GitHub Actions CI/CD logs
+These are different responsibilities processed sequentially:
+`Static Analysis → Finding → ML → Severity → AI → Explanation`
 
 ---
 
-## Future Enhancements
+## 9. Local vs Production Architecture
 
-1. **Additional Languages**
-   - JavaScript/TypeScript analysis
-   - Java analysis
-   - Go analysis
+### Local Development
+```text
+┌──────────────┐
+│ React        │
+│ localhost    │
+│ :3000        │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│ Flask        │
+│ localhost    │
+│ :5000        │
+└──────┬───────┘
+       │
+   ┌───┴──────────────┐
+   ▼                  ▼
+MongoDB Atlas       Ollama
+                    :11434
+       │
+       ▼
+     GitHub
+```
 
-2. **Advanced ML**
-   - Custom model training on user data
-   - Anomaly detection
-   - Predictive analytics
+### Production
+```text
+                   INTERNET
+                       │
+             ┌─────────▼─────────┐
+             │       Vercel      │
+             │   React Frontend  │
+             └─────────┬─────────┘
+                       │ HTTPS
+                       ▼
+             ┌───────────────────┐
+             │      Render       │
+             │   Flask Backend   │
+             └───────┬────┬──────┘
+                     │    │
+             ┌───────┘    └─────────┐
+             ▼                      ▼
+     ┌──────────────┐       ┌──────────────┐
+     │ MongoDB      │       │ Ollama       │
+     │ Atlas        │       │ Reachable    │
+     └──────────────┘       └──────────────┘
+             │
+             ▼
+        Persistent DB
 
-3. **Team Features**
-   - Team workspaces
-   - Shared analysis policies
-   - Role-based access control
+             Render
+                │
+                ▼
+             GitHub
+```
 
-4. **Integration Ecosystem**
-   - Slack notifications
-   - VS Code extension
-   - GitLab support
-   - Bitbucket support
+## The simplest way to remember the project
+
+The entire system has **5 major layers**:
+
+1. **PRESENTATION**: React + Tailwind
+2. **API / BUSINESS LOGIC**: Flask + JWT
+3. **CODE INTELLIGENCE**: Bandit + AST + Radon + Performance
+4. **AI INTELLIGENCE**: ML RandomForest + Ollama
+5. **PERSISTENCE + INTEGRATIONS**: MongoDB Atlas + GitHub
+
+> **IntelliReview AI receives source code or GitHub pull requests, analyzes the code using multiple static-analysis techniques, predicts finding severity with machine learning, generates developer-oriented explanations with an AI coding model, stores the results in MongoDB, displays them through a React dashboard, and can automatically publish the review back to GitHub pull requests.**

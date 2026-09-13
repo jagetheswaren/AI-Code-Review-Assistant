@@ -3,7 +3,7 @@ services:
     name: ai-code-review-api
     runtime: python
     plan: free
-    buildCommand: cd backend && pip install -r requirements.txt && python -m ml.train_ml_models || true
+    buildCommand: cd backend && pip install -r requirements.txt && python train_model.py || true
     startCommand: cd backend && gunicorn --config gunicorn.conf.py app:app
     envVars:
       - key: FLASK_ENV

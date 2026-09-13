@@ -42,33 +42,47 @@ const Dashboard = () => {
   if (loading) return <PageLoader text="Loading dashboard..." />;
 
   const stats = dashboard?.statistics || {};
-  const recentScans = dashboard?.recent_activity || [];
+  const recentScans = dashboard?.recent_scans || [];
   const trends = dashboard?.trends || [];
 
+  const byType = stats.by_type || {};
+  const totalSec = byType.security ?? stats.total_security ?? 0;
+  const totalSmell = byType.code_smell ?? stats.total_code_smells ?? 0;
+  const totalPerf = byType.performance ?? stats.total_performance ?? 0;
+  const healthScore = stats.total_scans ? Math.max(0, Math.min(100, Math.round(100 - (stats.total_issues || 0) * 2))) : 100;
   const statCards = [
-    { label: 'Total Scans', value: stats.total_scans || 0, icon: Eye, color: 'text-[#60A5FA]', bg: 'bg-[#2563EB]/10', change: '+12%' },
-    { label: 'Security Issues', value: stats.total_security || 0, icon: Shield, color: 'text-red-400', bg: 'bg-red-500/10', change: '-5%' },
-    { label: 'Code Smells', value: stats.total_code_smells || 0, icon: Search, color: 'text-amber-400', bg: 'bg-amber-500/10', change: '+3%' },
-    { label: 'Performance', value: stats.total_performance || 0, icon: Zap, color: 'text-purple-400', bg: 'bg-purple-500/10', change: '-8%' },
-    { label: 'Total Issues', value: stats.total_issues || 0, icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10', change: '+7%' },
-    { label: 'Health Score', value: stats.health_score || 85, suffix: '%', icon: Activity, color: 'text-emerald-400', bg: 'bg-emerald-500/10', change: '+2%', isScore: true },
+    { label: 'Total Scans', value: stats.total_scans || 0, icon: Eye, color: 'text-[#60A5FA]', bg: 'bg-[#2563EB]/10' },
+    { label: 'Security Issues', value: totalSec, icon: Shield, color: 'text-red-400', bg: 'bg-red-500/10' },
+    { label: 'Code Smells', value: totalSmell, icon: Search, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+    { label: 'Performance', value: totalPerf, icon: Zap, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+    { label: 'Total Issues', value: stats.total_issues || 0, icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { label: 'Health Score', value: healthScore, suffix: '%', icon: Activity, color: 'text-emerald-400', bg: 'bg-emerald-500/10', isScore: true },
   ];
 
+  const riskDist = stats.risk_distribution || {};
+  const bySev = stats.by_severity || riskDist;
   const severityData = {
     labels: ['Critical', 'High', 'Medium', 'Low', 'Info'],
     datasets: [{
-      data: [stats.critical || 3, stats.high || 8, stats.medium || 15, stats.low || 22, stats.info || 10],
+      data: [
+        bySev.critical || stats.critical || 0,
+        bySev.high || stats.high || 0,
+        bySev.medium || stats.medium || 0,
+        bySev.low || stats.low || 0,
+        bySev.info || stats.info || 0
+      ],
       backgroundColor: ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#3B82F6'],
       borderWidth: 0,
       spacing: 2,
     }],
   };
 
+  const hasRealTrends = trends.length > 0 && trends.some(t => (t.total_issues ?? t.count) > 0);
   const trendData = {
-    labels: trends.length > 0 ? trends.map((t) => t.date?.slice(5) || '') : ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+    labels: hasRealTrends ? trends.map((t) => (t._id || t.date || '').slice(5)) : ['No data'],
     datasets: [{
       label: 'Issues Found',
-      data: trends.length > 0 ? trends.map((t) => t.count || 0) : [12, 19, 8, 15],
+      data: hasRealTrends ? trends.map((t) => t.total_issues ?? t.count ?? 0) : [0],
       borderColor: '#2563EB',
       backgroundColor: 'rgba(37,99,235,0.1)',
       fill: true,
@@ -78,11 +92,12 @@ const Dashboard = () => {
     }],
   };
 
+  const cat = stats.by_type || {};
   const categoryData = {
     labels: ['Security', 'Code Smells', 'Performance', 'Best Practice'],
     datasets: [{
       label: 'Issues by Category',
-      data: [stats.total_security || 10, stats.total_code_smells || 25, stats.total_performance || 8, stats.total_best_practice || 12],
+      data: [cat.security || 0, cat.code_smell || 0, cat.performance || 0, cat.best_practice || 0],
       backgroundColor: ['rgba(239,68,68,0.7)', 'rgba(245,158,11,0.7)', 'rgba(168,85,247,0.7)', 'rgba(34,197,94,0.7)'],
       borderRadius: 6,
     }],
@@ -122,9 +137,6 @@ const Dashboard = () => {
                 <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', card.bg)}>
                   <card.icon className={cn('w-5 h-5', card.color)} />
                 </div>
-                <span className={cn('text-xs font-medium', card.change.startsWith('+') ? 'text-emerald-400' : 'text-red-400')}>
-                  {card.change}
-                </span>
               </div>
               <p className="text-2xl font-bold text-white">{card.isScore ? `${card.value}` : card.value}{card.suffix || ''}</p>
               <p className="text-xs text-slate-400 mt-1">{card.label}</p>
@@ -175,17 +187,17 @@ const Dashboard = () => {
             ) : (
               <div className="space-y-2">
                 {recentScans.slice(0, 5).map((scan, i) => (
-                  <Link key={i} to={`/history/${scan.id}`} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.04] transition-colors">
+                  <Link key={i} to={`/history/${scan.id || scan._id}`} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.04] transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: scan.risk_level === 'critical' ? '#EF4444' : scan.risk_level === 'high' ? '#F97316' : scan.risk_level === 'medium' ? '#EAB308' : '#22C55E' }} />
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: scan.summary?.overall_risk === 'critical' ? '#EF4444' : scan.summary?.overall_risk === 'high' ? '#F97316' : scan.summary?.overall_risk === 'medium' ? '#EAB308' : '#22C55E' }} />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{scan.filename || 'Code Review'}</p>
-                        <p className="text-xs text-slate-500">{scan.created_at ? new Date(scan.created_at).toLocaleString() : ''}</p>
+                        <p className="text-sm font-medium text-white truncate">{scan.summary?.file_path || 'Code Review'}</p>
+                        <p className="text-xs text-slate-500">{scan.timestamp ? new Date(scan.timestamp).toLocaleString() : ''}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <Badge variant={scan.risk_level === 'critical' ? 'danger' : scan.risk_level === 'high' ? 'warning' : 'success'}>{scan.risk_level || 'low'}</Badge>
-                      <span className="text-xs text-slate-400">{scan.total_issues || 0} issues</span>
+                      <Badge variant={scan.summary?.overall_risk === 'critical' ? 'danger' : scan.summary?.overall_risk === 'high' ? 'warning' : 'success'}>{scan.summary?.overall_risk || 'low'}</Badge>
+                      <span className="text-xs text-slate-400">{scan.summary?.total_issues || 0} issues</span>
                     </div>
                   </Link>
                 ))}

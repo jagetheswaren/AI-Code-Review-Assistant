@@ -12,7 +12,8 @@ import {
   Key,
 } from 'lucide-react';
 import { GithubIcon } from '../lib/utils';
-import { getGitHubStatus, getGitHubRepos } from '../api/client';
+import { getGitHubStatus, getGitHubRepos, connectGitHubPAT, disconnectGitHub } from '../api/client';
+import { useToast } from '../contexts/ToastContext';
 import {
   Button,
   Card,
@@ -68,14 +69,17 @@ function SkeletonCards() {
 
 export default function GitHubIntegration() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [status, setStatus] = useState(null);
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reposLoading, setReposLoading] = useState(false);
+  const [reposError, setReposError] = useState(null);
   const [search, setSearch] = useState('');
   const [showPATInput, setShowPATInput] = useState(false);
   const [patToken, setPatToken] = useState('');
   const [patLoading, setPatLoading] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     loadStatus();
@@ -86,8 +90,9 @@ export default function GitHubIntegration() {
     setLoading(true);
     try {
       const res = await getGitHubStatus();
-      setStatus(res);
-      if (res.connected) {
+      const data = res.data || res;
+      setStatus(data);
+      if (data.connected) {
         loadRepos();
       }
     } catch {
@@ -99,10 +104,14 @@ export default function GitHubIntegration() {
 
   async function loadRepos() {
     setReposLoading(true);
+    setReposError(null);
     try {
       const res = await getGitHubRepos();
-      setRepos(res.repos || res || []);
-    } catch {
+      const data = res.data || res;
+      setRepos(data.repos || data || []);
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Failed to fetch repositories';
+      setReposError(msg);
       setRepos([]);
     } finally {
       setReposLoading(false);
@@ -113,28 +122,29 @@ export default function GitHubIntegration() {
     if (!patToken.trim()) return;
     setPatLoading(true);
     try {
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE}/github/pat/connect`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ token: patToken }),
-      });
-      if (res.ok) {
-        setShowPATInput(false);
-        setPatToken('');
-        loadStatus();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Failed to connect');
-      }
-    } catch {
-      alert('Failed to connect with token');
+      await connectGitHubPAT(patToken.trim());
+      setShowPATInput(false);
+      setPatToken('');
+      toast({ title: 'GitHub connected', variant: 'success' });
+      loadStatus();
+    } catch (err) {
+      toast({ title: 'Failed to connect', description: err.response?.data?.error || err.message, variant: 'error' });
     } finally {
       setPatLoading(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    try {
+      await disconnectGitHub();
+      toast({ title: 'GitHub disconnected', variant: 'success' });
+      setStatus({ connected: false });
+      setRepos([]);
+    } catch (err) {
+      toast({ title: 'Disconnect failed', description: err.response?.data?.error || err.message, variant: 'error' });
+    } finally {
+      setDisconnecting(false);
     }
   }
 
@@ -201,10 +211,12 @@ export default function GitHubIntegration() {
                 </div>
                 <Button
                   variant="outline"
-                  className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  className="border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
                 >
                   <Unplug className="h-4 w-4 mr-2" />
-                  Disconnect
+                  {disconnecting ? 'Disconnecting...' : 'Disconnect'}
                 </Button>
               </div>
             ) : (
@@ -292,7 +304,12 @@ export default function GitHubIntegration() {
             </div>
           </div>
 
-          {reposLoading ? (
+          {reposError ? (
+            <Card className="bg-red-950/20 border-red-500/20 p-6 text-center">
+              <p className="text-sm text-red-400">{reposError}</p>
+              <Button onClick={loadRepos} variant="outline" size="sm" className="mt-3 border-red-500/30 text-red-400">Retry</Button>
+            </Card>
+          ) : reposLoading ? (
             <SkeletonCards />
           ) : filteredRepos.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -360,6 +377,10 @@ export default function GitHubIntegration() {
 
       {!loading && !status?.connected && (
         <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.3 }}>
+          <Card className="bg-amber-950/20 border-amber-500/20 p-6 text-center mb-4">
+            <p className="text-sm text-amber-300 font-medium">GitHub not configured</p>
+            <p className="text-xs text-amber-400/80 mt-1">Configure GITHUB_TOKEN or OAuth in backend environment. Connect above when ready.</p>
+          </Card>
           <EmptyState
             icon={<GithubIcon className="h-12 w-12 text-slate-500" />}
             title="Connect to get started"

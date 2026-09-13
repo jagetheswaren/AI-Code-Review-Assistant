@@ -55,21 +55,23 @@ def token_required(f):
 @review_bp.route('/api/analyze', methods=['POST'])
 @token_required
 def analyze_code():
-    start_time = time.time()
-    
-    user_id = g.current_user.get('user_id') if hasattr(g, 'current_user') else None
-    
     data = request.get_json()
-
     if not data or 'code' not in data:
         return jsonify({"error": "Code is required"}), 400
-
     code = data['code']
+    if not isinstance(code, str) or not code.strip():
+        return jsonify({"error": "Code is required and must be non-empty"}), 400
     filename = data.get('filename', 'code.py')
     github_pr_url = data.get('github_pr_url')
     github_pr_number = data.get('github_pr_number')
     github_repo = data.get('github_repo')
+    return _perform_analysis(code, filename, github_pr_url, github_pr_number, github_repo)
 
+
+def _perform_analysis(code: str, filename: str, github_pr_url=None, github_pr_number=None, github_repo=None):
+    """Shared analysis logic used by both /api/analyze and /api/analyze/file."""
+    start_time = time.time()
+    user_id = g.current_user.get('user_id') if hasattr(g, 'current_user') else None
     request_id = str(uuid.uuid4())
 
     security_issues = security_analyzer.analyze(code, filename)
@@ -78,16 +80,17 @@ def analyze_code():
     performance_issues = performance_analyzer.analyze(code, filename)
 
     all_issues = security_issues.issues + smell_issues + complexity_issues + performance_issues
+    all_issues = aggregator.merge_findings(all_issues)
 
-    # Enhance issues with NLP explanations
     for issue in all_issues:
         try:
             ai_reviewer.enhance_issue_with_nlp(issue, code[:2000])
+            if "codebert" not in issue.source:
+                issue.source.append("codebert")
         except Exception:
             issue.explanation = issue.message
             issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
 
-        # ML severity prediction
         try:
             ml_issue = {
                 "type": issue.type.value,
@@ -103,6 +106,9 @@ def analyze_code():
             if ml_classifier.is_trained:
                 issue.ml_severity = ml_result["ml_severity"]
                 issue.ml_confidence = ml_result["ml_confidence"]
+                issue.ml_model_version = ml_result.get("ml_model_version")
+                if "ml" not in issue.source:
+                    issue.source.append("ml")
         except Exception:
             pass
 
@@ -139,7 +145,6 @@ def analyze_code():
         processing_time_ms=int((time.time() - start_time) * 1000)
     )
 
-    # Save to database
     try:
         scan = ScanRecord(
             user_id=user_id,
@@ -175,16 +180,19 @@ def analyze_file():
     if not file.filename.endswith('.py'):
         return jsonify({"error": "Only Python files (.py) are supported"}), 400
 
-    code = file.read().decode('utf-8')
+    try:
+        code = file.read().decode('utf-8')
+    except Exception:
+        return jsonify({"error": "Failed to decode file as UTF-8"}), 400
     filename = file.filename
 
-    data = {'code': code, 'filename': filename}
-    request.json = data
-    return analyze_code()
+    return _perform_analysis(code, filename)
 
 
 @review_bp.route('/api/webhook/github', methods=['POST'])
 def github_webhook():
+    # Deprecated alias — canonical is /api/github/webhook (github_routes). Kept for backward compatibility.
+    current_app.logger.warning("Deprecated webhook path /api/webhook/github used — prefer /api/github/webhook")
     signature = request.headers.get('X-Hub-Signature-256', '')
     payload = request.get_data()
 
@@ -233,6 +241,7 @@ def github_webhook():
         complexity_issues = complexity_analyzer.analyze(content, filename)
 
         all_issues = security_issues.issues + smell_issues + complexity_issues
+        all_issues = aggregator.merge_findings(all_issues)
         ai_review = ai_reviewer.review_code(content, filename, all_issues)
 
         file_analysis = FileAnalysis(

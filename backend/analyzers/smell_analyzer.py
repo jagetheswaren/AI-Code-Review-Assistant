@@ -22,7 +22,8 @@ class SmellAnalyzer:
                 line_number=e.lineno or 1,
                 message=f"Syntax error: {e.msg}",
                 rule_id="SYNTAX_ERROR",
-                suggestion="Fix syntax error before analysis"
+                suggestion="Fix syntax error before analysis",
+                source=["pylint"]
             ))
             return self.issues
 
@@ -52,7 +53,8 @@ class SmellAnalyzer:
             line_number=line,
             message=message,
             rule_id=rule_id,
-            suggestion=suggestion
+            suggestion=suggestion,
+            source=["pylint"]
         ))
 
     def _check_unused_imports(self, tree: astroid.Module, code: str):

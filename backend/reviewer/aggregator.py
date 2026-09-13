@@ -21,25 +21,35 @@ class FindingAggregator:
             if findings:
                 all_findings.extend(findings)
 
-        deduplicated = self._deduplicate(all_findings)
-        sorted_findings = self._sort_by_severity(deduplicated)
-        return sorted_findings
+        return self.unify_findings(all_findings)
 
-    def _deduplicate(self, findings: List[Issue]) -> List[Issue]:
-        seen = set()
-        unique = []
+    def unify_findings(self, findings: List[Issue]) -> List[Issue]:
+        grouped = defaultdict(list)
+        for f in findings:
+            grouped[(f.line_number, f.type.value)].append(f)
 
-        for finding in findings:
-            key = (finding.rule_id, finding.line_number, finding.type.value)
-            if key not in seen:
-                seen.add(key)
-                unique.append(finding)
-            else:
-                existing_idx = next(i for i, f in enumerate(unique) if (f.rule_id, f.line_number, f.type.value) == key)
-                if self.severity_order.get(finding.severity, 0) > self.severity_order.get(unique[existing_idx].severity, 0):
-                    unique[existing_idx] = finding
+        unified_findings = []
+        for (line, type_val), group in grouped.items():
+            if len(group) == 1:
+                unified_findings.append(group[0])
+                continue
 
-        return unique
+            sorted_group = sorted(group, key=lambda f: self.severity_order.get(f.severity, 0), reverse=True)
+            primary = sorted_group[0].model_copy()  # Create a copy so we don't mutate the original in-place
+            
+            all_sources = []
+            all_rules = []
+            for f in sorted_group:
+                all_sources.extend(f.source)
+                if f.rule_id and f.rule_id not in all_rules:
+                    all_rules.append(f.rule_id)
+            
+            primary.source = list(dict.fromkeys(all_sources))
+            primary.rule_id = " | ".join(all_rules) if all_rules else None
+            
+            unified_findings.append(primary)
+
+        return self._sort_by_severity(unified_findings)
 
     def _sort_by_severity(self, findings: List[Issue]) -> List[Issue]:
         return sorted(findings, key=lambda f: (-self.severity_order.get(f.severity, 0), f.line_number))

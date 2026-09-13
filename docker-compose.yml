@@ -1,32 +1,15 @@
 version: '3.8'
 
 services:
-  postgres:
-    image: postgres:15
-    container_name: ai-code-review-postgres
+  mongodb:
+    image: mongo:7
+    container_name: ai-code-review-mongodb
     ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=code_review_assistant
+      - "27017:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7
-    container_name: ai-code-review-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,17 +20,14 @@ services:
       dockerfile: Dockerfile
     container_name: ai-code-review-backend
     ports:
-      - "8000:8000"
+      - "5000:5000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/code_review_assistant
-      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URI=mongodb://mongodb:27017/code_review_assistant
       - FRONTEND_URL=http://localhost:3000
     volumes:
       - ./backend:/app
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      mongodb:
         condition: service_healthy
 
   frontend:
@@ -56,19 +36,14 @@ services:
       dockerfile: Dockerfile
     container_name: ai-code-review-frontend
     ports:
-      - "3000:3000"
+      - "3000:80"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
+      - REACT_APP_API_URL=http://localhost:5000/api
     depends_on:
       - backend
 
 volumes:
-  postgres_data:
-  redis_data:
+  mongodb_data:
 
 networks:
   default:

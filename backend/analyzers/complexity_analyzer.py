@@ -24,7 +24,8 @@ class ComplexityAnalyzer:
                 line_number=1,
                 message=f"Complexity analysis failed: {str(e)}",
                 rule_id="COMPLEXITY_ANALYSIS_ERROR",
-                suggestion="Ensure code is syntactically valid Python"
+                suggestion="Ensure code is syntactically valid Python",
+                source=["radon"]
             ))
             return self.issues
 
@@ -43,7 +44,8 @@ class ComplexityAnalyzer:
             line_number=line,
             message=message,
             rule_id=rule_id,
-            suggestion=suggestion
+            suggestion=suggestion,
+            source=["radon"]
         ))
 
     def _analyze_cyclomatic_complexity(self, cc_results):

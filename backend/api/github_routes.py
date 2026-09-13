@@ -1,11 +1,19 @@
 import secrets
+import hmac
+import hashlib
+import os
+import threading
 from flask import Blueprint, request, jsonify, redirect, current_app, g
 import requests as http_requests
 from functools import wraps
 from database.mongodb import user_service, repo_service, pr_service
 from auth.jwt_auth import create_access_token, decode_token
+from ml.severity_classifier import SeverityClassifier
 
 github_bp = Blueprint('github', __name__)
+
+ml_classifier = SeverityClassifier()
+ml_classifier.load()
 
 
 def token_required(f):
@@ -157,6 +165,36 @@ def github_disconnect():
     return jsonify({"message": "GitHub account disconnected"})
 
 
+@github_bp.route('/api/github/repos/<repo_full_name>', methods=['GET'])
+@token_required
+def get_repo(repo_full_name):
+    user = user_service.get_user_by_id(g.current_user['user_id'])
+    if not user or not user.github_token:
+        return jsonify({"error": "GitHub not connected"}), 400
+    try:
+        from services.github_client import GitHubClient
+        owner, name = repo_full_name.split("/", 1)
+        client = GitHubClient(user.github_token, owner, name)
+        info = client.get_repo_info()
+        return jsonify({
+            "id": info.get("id"),
+            "name": info.get("name"),
+            "full_name": info.get("full_name"),
+            "description": info.get("description"),
+            "language": info.get("language"),
+            "default_branch": info.get("default_branch"),
+            "private": info.get("private", False),
+            "stargazers_count": info.get("stargazers_count", 0),
+            "forks_count": info.get("forks_count", 0),
+            "updated_at": info.get("updated_at"),
+            "html_url": info.get("html_url"),
+            "owner": info.get("owner", {}).get("login")
+        })
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch repo info: {e}")
+        return jsonify({"error": "Failed to fetch repository"}), 500
+
+
 @github_bp.route('/api/github/repos', methods=['GET'])
 @token_required
 def list_repos():
@@ -191,7 +229,25 @@ def list_repos():
         return jsonify({"error": "Failed to fetch repositories"}), 500
 
 
-@github_bp.route('/api/github/repos/<repo_full_name>/branches', methods=['GET'])
+@github_bp.route('/api/github/repos/<path:repo_full_name>', methods=['GET'])
+@token_required
+def get_repo_info_route(repo_full_name):
+    user = user_service.get_user_by_id(g.current_user['user_id'])
+    if not user or not user.github_token:
+        return jsonify({"error": "GitHub not connected"}), 400
+
+    try:
+        from services.github_client import GitHubClient
+        owner, name = repo_full_name.split("/", 1)
+        client = GitHubClient(user.github_token, owner, name)
+        repo_info = client.get_repo_info()
+        return jsonify(repo_info)
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch repo info: {e}")
+        return jsonify({"error": "Failed to fetch repository information"}), 500
+
+
+@github_bp.route('/api/github/repos/<path:repo_full_name>/branches', methods=['GET'])
 @token_required
 def list_branches(repo_full_name):
     user = user_service.get_user_by_id(g.current_user['user_id'])
@@ -209,7 +265,7 @@ def list_branches(repo_full_name):
         return jsonify({"error": "Failed to fetch branches"}), 500
 
 
-@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests', methods=['GET'])
+@github_bp.route('/api/github/repos/<path:repo_full_name>/pull-requests', methods=['GET'])
 @token_required
 def list_pull_requests(repo_full_name):
     user = user_service.get_user_by_id(g.current_user['user_id'])
@@ -226,6 +282,7 @@ def list_pull_requests(repo_full_name):
             "title": pr["title"],
             "body": pr.get("body", ""),
             "author": pr.get("user", {}).get("login", "unknown"),
+            "author_avatar": pr.get("user", {}).get("avatar_url"),
             "head_sha": pr.get("head", {}).get("sha", ""),
             "head_branch": pr.get("head", {}).get("ref", ""),
             "base_branch": pr.get("base", {}).get("ref", "main"),
@@ -235,13 +292,103 @@ def list_pull_requests(repo_full_name):
             "deletions": pr.get("deletions", 0),
             "created_at": pr.get("created_at"),
             "updated_at": pr.get("updated_at"),
+            "html_url": pr.get("html_url"),
+            "user": pr.get("user"),
         } for pr in prs]})
     except Exception as e:
         current_app.logger.error(f"Failed to fetch PRs: {e}")
         return jsonify({"error": "Failed to fetch pull requests"}), 500
 
 
-@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests/<int:pr_number>/analyze', methods=['POST'])
+@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests/<int:pr_number>', methods=['GET'])
+@token_required
+def get_pr(repo_full_name, pr_number):
+    user = user_service.get_user_by_id(g.current_user['user_id'])
+    if not user or not user.github_token:
+        return jsonify({"error": "GitHub not connected"}), 400
+    try:
+        from services.github_client import GitHubClient
+        owner, name = repo_full_name.split("/", 1)
+        client = GitHubClient(user.github_token, owner, name)
+        pr = client.get_pr_details(pr_number)
+        return jsonify({
+            "number": pr["number"], "title": pr["title"], "body": pr.get("body",""),
+            "author": pr.get("user",{}).get("login","unknown"), "author_avatar": pr.get("user",{}).get("avatar_url"),
+            "state": pr.get("state"), "html_url": pr.get("html_url"),
+            "head_branch": pr.get("head",{}).get("ref"), "base_branch": pr.get("base",{}).get("ref"),
+            "head_sha": pr.get("head",{}).get("sha"), "base_sha": pr.get("base",{}).get("sha"),
+            "additions": pr.get("additions"), "deletions": pr.get("deletions"), "changed_files": pr.get("changed_files"),
+            "created_at": pr.get("created_at"), "updated_at": pr.get("updated_at"),
+            "user": pr.get("user"), "head": pr.get("head"), "base": pr.get("base")
+        })
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch PR details: {e}")
+        return jsonify({"error": "Failed to fetch PR details"}), 500
+
+
+@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests/<int:pr_number>/files', methods=['GET'])
+@token_required
+def get_pr_files(repo_full_name, pr_number):
+    user = user_service.get_user_by_id(g.current_user['user_id'])
+    if not user or not user.github_token:
+        return jsonify({"error": "GitHub not connected"}), 400
+    try:
+        from services.github_client import GitHubClient
+        owner, name = repo_full_name.split("/", 1)
+        client = GitHubClient(user.github_token, owner, name)
+        files = client.get_pull_request_files(pr_number)
+        supported = []
+        for f in files:
+            filename = f.get("filename","")
+            is_python = filename.endswith(".py")
+            supported.append({
+                "filename": filename, "status": f.get("status"), "additions": f.get("additions",0),
+                "deletions": f.get("deletions",0), "changes": f.get("changes",0),
+                "patch": f.get("patch","")[:3000] if f.get("patch") else None,
+                "supported": is_python, "skip_reason": None if is_python else "Unsupported file type — skipped. Only Python (.py) is analyzed."
+            })
+        return jsonify({"files": supported, "total": len(supported)})
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch PR files: {e}")
+        return jsonify({"error": "Failed to fetch PR files"}), 500
+
+
+@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests/<int:pr_number>/comment', methods=['POST'])
+@token_required
+def post_pr_comment(repo_full_name, pr_number):
+    user = user_service.get_user_by_id(g.current_user['user_id'])
+    if not user or not user.github_token:
+        return jsonify({"error": "GitHub not connected"}), 400
+    data = request.get_json(silent=True) or {}
+    # Expect either scan_id or raw body
+    try:
+        from database.mongodb import scan_service
+        from reviewer.github_commenter import GitHubCommenter
+        from services.github_client import GitHubClient
+        owner, name = repo_full_name.split("/", 1)
+        client = GitHubClient(user.github_token, owner, name)
+        scan_id = data.get("scan_id") or data.get("request_id")
+        if scan_id:
+            scan = scan_service.get_scan_by_id(scan_id) or scan_service.get_scan_by_request_id(scan_id)
+            if not scan:
+                return jsonify({"error": "Scan not found"}), 404
+            # Build comment from scan
+            from models.review import ReviewResponse
+            resp = ReviewResponse(request_id=scan.request_id, file_analyses=scan.file_analyses, summary=scan.summary, ai_review=scan.ai_review)
+            commenter = GitHubCommenter(client)
+            body = commenter.format_review_comment(resp)
+        else:
+            body = data.get("body")
+            if not body:
+                return jsonify({"error": "body or scan_id required"}), 400
+        result = client.create_pr_comment(pr_number, body)
+        return jsonify({"message": "Review posted successfully.", "comment_url": result.get("html_url")})
+    except Exception as e:
+        current_app.logger.error(f"Failed to post PR comment: {e}")
+        return jsonify({"error": "Failed to post review."}), 500
+
+
+@github_bp.route('/api/github/repos/<path:repo_full_name>/pull-requests/<int:pr_number>/analyze', methods=['POST'])
 @token_required
 def analyze_pull_request(repo_full_name, pr_number):
     user = user_service.get_user_by_id(g.current_user['user_id'])
@@ -253,7 +400,9 @@ def analyze_pull_request(repo_full_name, pr_number):
         from analyzers.security_analyzer import SecurityAnalyzer
         from analyzers.smell_analyzer import SmellAnalyzer
         from analyzers.complexity_analyzer import ComplexityAnalyzer
+        from analyzers.performance_analyzer import PerformanceAnalyzer
         from reviewer.ai_reviewer import AIReviewer
+        from reviewer.aggregator import FindingAggregator
         from models.review import ReviewResponse, FileAnalysis, AnalysisSummary, Issue
         import uuid
         import time
@@ -264,14 +413,14 @@ def analyze_pull_request(repo_full_name, pr_number):
         pr_details = client.get_pr_details(pr_number)
         files = client.get_pull_request_files(pr_number)
         python_files = [f for f in files if f['filename'].endswith('.py')]
-
-        if not python_files:
-            return jsonify({"message": "No Python files in this PR", "files_reviewed": 0})
+        non_python_files = [f for f in files if not f['filename'].endswith('.py')]
 
         security_analyzer = SecurityAnalyzer()
         smell_analyzer = SmellAnalyzer()
         complexity_analyzer = ComplexityAnalyzer()
+        performance_analyzer = PerformanceAnalyzer()
         ai_reviewer = AIReviewer()
+        aggregator = FindingAggregator()
 
         all_file_analyses = []
         all_issues = []
@@ -285,19 +434,58 @@ def analyze_pull_request(repo_full_name, pr_number):
             sec_issues = security_analyzer.analyze(content, filename)
             smell_issues = smell_analyzer.analyze(content, filename)
             comp_issues = complexity_analyzer.analyze(content, filename)
+            perf_issues = performance_analyzer.analyze(content, filename)
 
-            file_issues = sec_issues.issues + smell_issues + comp_issues
-            all_issues.extend(file_issues)
-
+            raw_file_issues = sec_issues.issues + smell_issues + comp_issues + perf_issues
+            file_issues = aggregator.merge_findings(raw_file_issues)
+            
+            # Predict severity using ML
             for issue in file_issues:
-                issue.explanation = issue.message
-                issue.fix_suggestion = issue.suggestion
+                try:
+                    ai_reviewer.enhance_issue_with_nlp(issue, content[:2000])
+                    if "codebert" not in issue.source:
+                        issue.source.append("codebert")
+                except Exception:
+                    issue.explanation = issue.message
+                    issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
+
+                try:
+                    ml_issue = {
+                        "type": issue.type.value,
+                        "severity": issue.severity.value,
+                        "line_number": issue.line_number,
+                        "message": issue.message,
+                        "rule_id": issue.rule_id or "",
+                        "suggestion": issue.suggestion,
+                        "code_snippet": issue.code_snippet,
+                        "explanation": issue.explanation,
+                    }
+                    ml_result = ml_classifier.predict([ml_issue])[0]
+                    if ml_classifier.is_trained:
+                        issue.ml_severity = ml_result["ml_severity"]
+                        issue.ml_confidence = ml_result["ml_confidence"]
+                        issue.ml_model_version = ml_result.get("ml_model_version")
+                        if "ml" not in issue.source:
+                            issue.source.append("ml")
+                except Exception:
+                    pass
+
+            all_issues.extend(file_issues)
 
             fa = FileAnalysis(
                 file_path=filename,
                 language="python",
                 lines_of_code=len(content.split('\n')),
                 issues=file_issues
+            )
+            all_file_analyses.append(fa)
+            
+        for file_info in non_python_files:
+            fa = FileAnalysis(
+                file_path=file_info['filename'],
+                language="unknown",
+                lines_of_code=0,
+                issues=[]
             )
             all_file_analyses.append(fa)
 
@@ -355,6 +543,14 @@ def analyze_pull_request(repo_full_name, pr_number):
         )
         scan_service.create_scan(scan)
 
+        req_data = request.get_json(silent=True) or {}
+        post_comment = req_data.get('post_comment', False)
+        if post_comment:
+            from reviewer.github_commenter import GitHubCommenter
+            commenter = GitHubCommenter(client)
+            comment_body = commenter.format_review_comment(response)
+            client.create_pr_comment(pr_number, comment_body)
+
         return jsonify({
             "message": "Analysis completed",
             "request_id": response.request_id,
@@ -368,3 +564,225 @@ def analyze_pull_request(repo_full_name, pr_number):
     except Exception as e:
         current_app.logger.error(f"Failed to analyze PR: {e}")
         return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+
+
+@github_bp.route('/api/github/webhook', methods=['POST'])
+def github_webhook():
+    """Canonical GitHub webhook endpoint. Validates HMAC SHA-256 and triggers async PR review."""
+    from database.mongodb import user_service
+
+    secret = os.environ.get("GITHUB_WEBHOOK_SECRET") or current_app.config.get("GITHUB_WEBHOOK_SECRET")
+    if secret:
+        signature = request.headers.get("X-Hub-Signature-256")
+        if not signature:
+            return jsonify({"error": "Missing signature"}), 400
+        
+        mac = hmac.new(secret.encode(), msg=request.data, digestmod=hashlib.sha256)
+        expected_signature = "sha256=" + mac.hexdigest()
+        if not hmac.compare_digest(expected_signature, signature):
+            return jsonify({"error": "Invalid signature"}), 403
+
+    event = request.headers.get("X-GitHub-Event")
+    if event == "ping":
+        return jsonify({"message": "pong"})
+    
+    if event != "pull_request":
+        return jsonify({"message": "Ignored event"}), 200
+
+    payload = request.get_json(silent=True) or {}
+    action = payload.get("action")
+    
+    # Webhook loop protection: ignore PR updates caused by the bot itself
+    sender = payload.get("sender", {}).get("login", "")
+    # Assuming bot account contains 'bot' or matches specific patterns if configured
+    if "bot" in sender.lower() or sender == "intellireview-ai":
+        return jsonify({"message": "Ignored bot event to prevent loop"}), 200
+
+    # Loop protection: ignore events triggered by our own bot comments or by synchronize from bot pushes
+    sender = payload.get("sender", {}).get("login", "")
+    if sender and sender == owner_login and payload.get("pull_request", {}).get("user", {}).get("login") == sender:
+        # If sender is bot-like and matches owner, still verify but avoid duplicate if recent
+        pass
+    # Ignore issue_comment events that are not pull_request
+    if sender and "[bot]" in sender:
+        return jsonify({"message": "Ignored bot event (loop protection)"}), 200
+
+    if action not in ["opened", "synchronize", "reopened"]:
+        return jsonify({"message": f"Ignored PR action: {action}"}), 200
+
+    repo_full_name = payload.get("repository", {}).get("full_name")
+    pr_number = payload.get("pull_request", {}).get("number")
+    owner_login = payload.get("repository", {}).get("owner", {}).get("login")
+
+    if not repo_full_name or not pr_number:
+        return jsonify({"error": "Invalid payload"}), 400
+
+    # Find a user to act on behalf of (the repo owner or any user with a token for now)
+    user = user_service.collection.find_one({"github_username": owner_login})
+    if not user:
+        # Fallback to the sender or any admin user (simplification for single-tenant / prototype)
+        user = user_service.collection.find_one({"github_token": {"$ne": None}})
+        
+    if not user or not user.get("github_token"):
+        return jsonify({"error": "No user token available to process webhook"}), 500
+
+    github_token = user["github_token"]
+    user_id = str(user["_id"])
+
+    # Define the background task
+    def process_pr_async(app, repo_full_name, pr_number, token, uid):
+        with app.app_context():
+            try:
+                from services.github_client import GitHubClient
+                from analyzers.security_analyzer import SecurityAnalyzer
+                from analyzers.smell_analyzer import SmellAnalyzer
+                from analyzers.complexity_analyzer import ComplexityAnalyzer
+                from analyzers.performance_analyzer import PerformanceAnalyzer
+                from reviewer.ai_reviewer import AIReviewer
+                from reviewer.aggregator import FindingAggregator
+                from reviewer.github_commenter import GitHubCommenter
+                from models.review import ReviewResponse, FileAnalysis, AnalysisSummary
+                from database.mongodb import scan_service, ScanRecord, FileAnalysis as MongoFileAnalysis, AnalysisSummary as MongoAnalysisSummary
+                import uuid
+
+                owner, name = repo_full_name.split("/", 1)
+                client = GitHubClient(token, owner, name)
+                
+                pr_details = client.get_pr_details(pr_number)
+                files = client.get_pull_request_files(pr_number)
+                python_files = [f for f in files if f['filename'].endswith('.py')]
+
+                if not python_files:
+                    return
+
+                security_analyzer = SecurityAnalyzer()
+                smell_analyzer = SmellAnalyzer()
+                complexity_analyzer = ComplexityAnalyzer()
+                performance_analyzer = PerformanceAnalyzer()
+                ai_reviewer = AIReviewer()
+                aggregator = FindingAggregator()
+
+                all_file_analyses = []
+                all_issues = []
+
+                for file_info in python_files:
+                    filename = file_info['filename']
+                    content = client.get_file_content(filename, pr_details['head']['sha'])
+                    if not content:
+                        continue
+
+                    sec_issues = security_analyzer.analyze(content, filename)
+                    smell_issues = smell_analyzer.analyze(content, filename)
+                    comp_issues = complexity_analyzer.analyze(content, filename)
+                    perf_issues = performance_analyzer.analyze(content, filename)
+
+                    raw_file_issues = sec_issues.issues + smell_issues + comp_issues + perf_issues
+                    file_issues = aggregator.merge_findings(raw_file_issues)
+
+                    # Predict severity using ML
+                    for issue in file_issues:
+                        try:
+                            ai_reviewer.enhance_issue_with_nlp(issue, content[:2000])
+                            if "codebert" not in issue.source:
+                                issue.source.append("codebert")
+                        except Exception:
+                            issue.explanation = issue.message
+                            issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
+
+                        try:
+                            ml_issue = {
+                                "type": issue.type.value,
+                                "severity": issue.severity.value,
+                                "line_number": issue.line_number,
+                                "message": issue.message,
+                                "rule_id": issue.rule_id or "",
+                                "suggestion": issue.suggestion,
+                                "code_snippet": issue.code_snippet,
+                                "explanation": issue.explanation,
+                            }
+                            ml_result = ml_classifier.predict([ml_issue])[0]
+                            if ml_classifier.is_trained:
+                                issue.ml_severity = ml_result["ml_severity"]
+                                issue.ml_confidence = ml_result["ml_confidence"]
+                                issue.ml_model_version = ml_result.get("ml_model_version")
+                                if "ml" not in issue.source:
+                                    issue.source.append("ml")
+                        except Exception:
+                            pass
+
+                    all_issues.extend(file_issues)
+
+                    fa = FileAnalysis(
+                        file_path=filename,
+                        language="python",
+                        lines_of_code=len(content.split('\n')),
+                        issues=file_issues
+                    )
+                    all_file_analyses.append(fa)
+
+                by_type = {}
+                by_severity = {}
+                for issue in all_issues:
+                    by_type[issue.type.value] = by_type.get(issue.type.value, 0) + 1
+                    by_severity[issue.severity.value] = by_severity.get(issue.severity.value, 0) + 1
+
+                overall_risk = "none"
+                if by_severity.get("critical", 0) > 0:
+                    overall_risk = "critical"
+                elif by_severity.get("high", 0) > 0:
+                    overall_risk = "high"
+                elif by_severity.get("medium", 0) > 0:
+                    overall_risk = "medium"
+                elif by_severity.get("low", 0) > 0:
+                    overall_risk = "low"
+
+                summary = AnalysisSummary(
+                    total_issues=len(all_issues),
+                    by_type=by_type,
+                    by_severity=by_severity,
+                    overall_risk=overall_risk,
+                    file_path=repo_full_name
+                )
+
+                code_sample = ""
+                for file_info in python_files[:3]:
+                    content = client.get_file_content(file_info['filename'], pr_details['head']['sha'])
+                    if content:
+                        code_sample += f"\n# {file_info['filename']}\n{content[:500]}\n"
+
+                ai_review = ai_reviewer.review_code(code_sample, repo_full_name, all_issues)
+
+                response = ReviewResponse(
+                    request_id=str(uuid.uuid4()),
+                    file_analyses=all_file_analyses,
+                    summary=summary,
+                    ai_review=ai_review,
+                    processing_time_ms=0
+                )
+
+                scan = ScanRecord(
+                    user_id=uid,
+                    request_id=response.request_id,
+                    file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in all_file_analyses],
+                    summary=MongoAnalysisSummary.model_validate(summary.model_dump()),
+                    ai_review=ai_review,
+                    github_pr_url=f"https://github.com/{repo_full_name}/pull/{pr_number}",
+                    github_pr_number=pr_number,
+                    github_repo=repo_full_name,
+                    processing_time_ms=response.processing_time_ms
+                )
+                scan_service.create_scan(scan)
+
+                commenter = GitHubCommenter(client)
+                comment_body = commenter.format_review_comment(response)
+                client.create_pr_comment(pr_number, comment_body)
+                app.logger.info(f"Webhook processing completed and comment posted for PR #{pr_number}")
+            except Exception as e:
+                app.logger.error(f"Background PR processing failed: {e}")
+
+    app = current_app._get_current_object()
+    thread = threading.Thread(target=process_pr_async, args=(app, repo_full_name, pr_number, github_token, user_id))
+    thread.start()
+
+    return jsonify({"message": "Processing started"}), 202
+

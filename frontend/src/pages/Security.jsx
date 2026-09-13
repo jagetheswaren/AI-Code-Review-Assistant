@@ -1,109 +1,105 @@
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+import React, { useState, useEffect } from 'react';
+import { getHistory, getStats } from '../api/client';
+import { PageLoader, EmptyState, Card, Badge } from '../components/ui';
+import { Shield, AlertTriangle } from 'lucide-react';
 
 export default function Security() {
   const [filter, setFilter] = useState('all');
+  const [issues, setIssues] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // eslint-disable-next-line no-unused-vars
-  const { data: stats } = useQuery({
-    queryKey: ['securityStats'],
-    queryFn: async () => {
-      const res = await axios.get(`${API_URL}/statistics`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      return res.data;
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [historyRes, statsRes] = await Promise.allSettled([getHistory(1, 100), getStats()]);
+        const scans = historyRes.status === 'fulfilled' ? (historyRes.value.data?.scans || []) : [];
+        const allIssues = scans.flatMap(s => (s.file_analyses || []).flatMap(fa => (fa.issues || []).map(i => ({ ...i, _file: fa.file_path, _scanId: s.id || s._id, _timestamp: s.timestamp }))));
+        const sec = allIssues.filter(i => i.type === 'security');
+        setIssues(sec);
+      } catch (e) {
+        setError(e.response?.data?.error || e.message);
+      } finally {
+        setLoading(false);
+      }
     }
-  });
+    load();
+  }, []);
 
-  const issues = [
-    { id: 'SEC-101', severity: 'critical', category: 'OWASP A03: Injection', file: 'auth_service/login.py', line: 14, rule: 'SQL Injection String Concatenation', fix: 'Use parameterized queries with cursor.execute()' },
-    { id: 'SEC-102', severity: 'high', category: 'OWASP A08: Software Integrity', file: 'backend/utils.py', line: 32, rule: 'Unsafe Pickle Deserialization', fix: 'Replace pickle.loads() with json.loads()' },
-    { id: 'SEC-103', severity: 'medium', category: 'OWASP A02: Cryptographic Failures', file: 'config/keys.py', line: 8, rule: 'Hardcoded Secret Key', fix: 'Store secrets in environment variables via python-dotenv' },
-    { id: 'SEC-104', severity: 'low', category: 'OWASP A05: Security Misconfiguration', file: 'app.py', line: 42, rule: 'Debug Mode Enabled in Production', fix: 'Set FLASK_ENV=production and debug=False' },
-  ];
+  const counts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
+  issues.forEach(i => { const s = (i.severity || 'info').toLowerCase(); if (counts[s] !== undefined) counts[s]++; });
 
-  const filteredIssues = filter === 'all' ? issues : issues.filter(i => i.severity === filter);
+  const filtered = filter === 'all' ? issues : issues.filter(i => (i.severity || '').toLowerCase() === filter);
+
+  if (loading) return <PageLoader text="Loading security findings..." />;
+  if (error) return <div className="p-6 text-red-400 text-sm">Failed to load security findings: {error}</div>;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Security Vulnerabilities Inspector</h1>
-          <p className="text-sm text-slate-400">OWASP Top 10 Security Audit & Automated Remediation</p>
+          <p className="text-sm text-slate-400">Real Bandit + AST Security Findings from MongoDB</p>
         </div>
+        <Badge variant="outline" className="border-white/10 text-slate-400">{issues.length} findings</Badge>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-[#121826] p-4 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 uppercase font-semibold">Critical Vulnerabilities</div>
-          <div className="text-2xl font-extrabold text-red-500 mt-1">1</div>
-        </div>
-        <div className="bg-[#121826] p-4 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 uppercase font-semibold">High Vulnerabilities</div>
-          <div className="text-2xl font-extrabold text-amber-500 mt-1">1</div>
-        </div>
-        <div className="bg-[#121826] p-4 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 uppercase font-semibold">Medium Vulnerabilities</div>
-          <div className="text-2xl font-extrabold text-blue-500 mt-1">1</div>
-        </div>
-        <div className="bg-[#121826] p-4 rounded-xl border border-slate-800">
-          <div className="text-xs text-slate-400 uppercase font-semibold">Low Vulnerabilities</div>
-          <div className="text-2xl font-extrabold text-emerald-500 mt-1">1</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        {[
+          { k: 'critical', label: 'Critical', color: 'text-red-500' },
+          { k: 'high', label: 'High', color: 'text-amber-500' },
+          { k: 'medium', label: 'Medium', color: 'text-blue-500' },
+          { k: 'low', label: 'Low', color: 'text-emerald-500' },
+          { k: 'info', label: 'Info', color: 'text-slate-400' },
+        ].map(c => (
+          <Card key={c.k} className="bg-[#121826] border-slate-800 p-4">
+            <div className="text-xs text-slate-400 uppercase font-semibold">{c.label}</div>
+            <div className={`text-2xl font-extrabold mt-1 ${c.color}`}>{counts[c.k]}</div>
+          </Card>
+        ))}
       </div>
 
       <div className="flex gap-2 border-b border-slate-800 pb-3">
-        {['all', 'critical', 'high', 'medium', 'low'].map(s => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition-colors ${
-              filter === s ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800'
-            }`}
-          >
+        {['all', 'critical', 'high', 'medium', 'low', 'info'].map(s => (
+          <button key={s} onClick={() => setFilter(s)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase transition-colors ${filter === s ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:bg-slate-800'}`}>
             {s}
           </button>
         ))}
       </div>
 
-      <div className="bg-[#121826] border border-slate-800 rounded-xl overflow-hidden">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-900/50 text-slate-400 uppercase border-b border-slate-800">
-            <tr>
-              <th className="p-3">ID</th>
-              <th className="p-3">Severity</th>
-              <th className="p-3">OWASP Category</th>
-              <th className="p-3">File & Line</th>
-              <th className="p-3">Rule Description</th>
-              <th className="p-3">Recommended Fix</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/50 text-slate-200">
-            {filteredIssues.map(iss => (
-              <tr key={iss.id} className="hover:bg-slate-800/30">
-                <td className="p-3 font-mono font-bold">{iss.id}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                    iss.severity === 'critical' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                    iss.severity === 'high' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                    iss.severity === 'medium' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                    'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  }`}>
-                    {iss.severity}
-                  </span>
-                </td>
-                <td className="p-3 text-slate-400">{iss.category}</td>
-                <td className="p-3 font-mono text-slate-300">{iss.file}:{iss.line}</td>
-                <td className="p-3 font-medium">{iss.rule}</td>
-                <td className="p-3 text-emerald-400 font-mono text-[11px] bg-emerald-950/20">{iss.fix}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {filtered.length === 0 ? (
+        <EmptyState icon={Shield} title={issues.length === 0 ? "No security findings yet" : "No matching findings"} description={issues.length === 0 ? "Run a code analysis to populate security findings." : `No ${filter} severity findings.`} />
+      ) : (
+        <div className="bg-[#121826] border border-slate-800 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900/50 text-slate-400 uppercase border-b border-slate-800">
+                <tr>
+                  <th className="p-3">Severity</th>
+                  <th className="p-3">File & Line</th>
+                  <th className="p-3">Rule</th>
+                  <th className="p-3">Message</th>
+                  <th className="p-3">Fix</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50 text-slate-200">
+                {filtered.map((iss, idx) => (
+                  <tr key={idx} className="hover:bg-slate-800/30">
+                    <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${iss.severity === 'critical' ? 'bg-red-500/20 text-red-400 border border-red-500/30' : iss.severity === 'high' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : iss.severity === 'medium' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : iss.severity === 'low' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'}`}>{iss.severity}</span></td>
+                    <td className="p-3 font-mono text-slate-300">{iss._file || iss.file_path || '-'}:{iss.line_number || iss.line || '-'}</td>
+                    <td className="p-3 font-mono text-[11px]">{iss.rule_id || '-'}</td>
+                    <td className="p-3 font-medium">{iss.message}</td>
+                    <td className="p-3 text-emerald-400 font-mono text-[11px] bg-emerald-950/20">{iss.suggestion || iss.fix_suggestion || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

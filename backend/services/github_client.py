@@ -67,6 +67,18 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
+    def get_pr_comments(self, pr_number: int) -> List[Dict[str, Any]]:
+        url = self._url(f"/issues/{pr_number}/comments")
+        response = requests.get(url, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
+
+    def update_pr_comment(self, comment_id: int, body: str) -> Dict[str, Any]:
+        url = self._url(f"/issues/comments/{comment_id}")
+        response = requests.patch(url, headers=self.headers, json={"body": body})
+        response.raise_for_status()
+        return response.json()
+
     def create_review_comment(self, pr_number: int, commit_sha: str, path: str,
                                body: str, line: int, side: str = "RIGHT") -> Dict[str, Any]:
         url = self._url(f"/pulls/{pr_number}/comments")

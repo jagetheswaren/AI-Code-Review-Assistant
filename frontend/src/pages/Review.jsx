@@ -79,9 +79,10 @@ export default function Review() {
     setLoading(true);
     try {
       const res = await analyzeCode(code, filename || `untitled.${language === 'python' ? 'py' : language === 'typescript' ? 'ts' : language === 'java' ? 'java' : 'js'}`);
-      setResults(res);
+      setResults(res.data);
     } catch (err) {
-      toast({ title: 'Analysis failed', description: err.message, variant: 'error' });
+      const msg = err.response?.data?.error || err.message || 'Analysis failed';
+      toast({ title: 'Analysis failed', description: msg, variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -113,10 +114,11 @@ export default function Review() {
     reader.readAsText(file);
   }
 
-  const totalIssues = results?.issues?.length || 0;
-  const securityIssues = results?.issues?.filter((i) => i.category === 'security').length || 0;
-  const codeSmells = results?.issues?.filter((i) => i.category === 'code_smell').length || 0;
-  const perfIssues = results?.issues?.filter((i) => i.category === 'performance').length || 0;
+  const allIssues = results?.file_analyses?.flatMap(fa => fa.issues) || [];
+  const totalIssues = allIssues.length || 0;
+  const securityIssues = allIssues.filter((i) => i.type === 'security').length || 0;
+  const codeSmells = allIssues.filter((i) => i.type === 'code_smell').length || 0;
+  const perfIssues = allIssues.filter((i) => i.type === 'performance').length || 0;
 
   if (loading) {
     return <PageLoader message="Analyzing code..." />;
@@ -302,10 +304,10 @@ export default function Review() {
             </Card>
           </div>
 
-          {results.issues?.length > 0 && (
+          {allIssues.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-xl font-semibold text-white">Issues Found</h3>
-              {results.issues.map((issue, idx) => (
+              {allIssues.map((issue, idx) => (
                 <motion.div
                   key={idx}
                   initial={{ opacity: 0, y: 10 }}
@@ -325,11 +327,20 @@ export default function Review() {
                             >
                               {issue.severity?.toUpperCase()}
                             </Badge>
-                            {issue.line && (
-                              <span className="text-xs text-slate-500 font-mono">Line {issue.line}</span>
+                            {issue.line_number && (
+                              <span className="text-xs text-slate-500 font-mono">Line {issue.line_number}</span>
                             )}
                             {issue.rule_id && (
                               <span className="text-xs text-slate-500 font-mono">{issue.rule_id}</span>
+                            )}
+                            {issue.source && issue.source.length > 0 && (
+                              <div className="flex gap-1 ml-auto">
+                                {issue.source.map((src, i) => (
+                                  <Badge key={i} className="text-[10px] uppercase bg-white/5 text-slate-400 border-white/10">
+                                    {src}
+                                  </Badge>
+                                ))}
+                              </div>
                             )}
                           </div>
                           <p className="text-sm text-white font-medium mb-1">{issue.message}</p>
@@ -353,7 +364,7 @@ export default function Review() {
                             </Badge>
                             {issue.ml_confidence && (
                               <p className="text-xs text-slate-500 mt-1">
-                                {Math.round(issue.ml_confidence * 100)}% confidence
+                                {Math.round(issue.ml_confidence * 100)}% conf ({issue.ml_model_version || 'v1'})
                               </p>
                             )}
                           </div>
@@ -366,7 +377,7 @@ export default function Review() {
             </div>
           )}
 
-          {results.review && (
+          {results.ai_review && (
             <Card className="bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border-indigo-500/20">
               <div className="px-6 py-5">
                 <div className="flex items-center gap-3 mb-4">
@@ -376,7 +387,7 @@ export default function Review() {
                   <h3 className="text-lg font-semibold text-white">AI Review</h3>
                 </div>
                 <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {results.review}
+                  {results.ai_review}
                 </div>
               </div>
             </Card>

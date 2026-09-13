@@ -16,7 +16,8 @@ export default function Reports() {
   async function loadReports() {
     setLoading(true);
     try {
-      const data = await getHistory(1, 100);
+      const res = await getHistory(1, 100);
+      const data = res.data || res;
       setScans(data.scans || []);
     } catch {
       setScans([]);
@@ -33,23 +34,26 @@ export default function Reports() {
 
   async function handleDownload(scanId, type, filename) {
     try {
-      let blob;
+      let res;
       let ext;
       if (type === 'json') {
-        blob = await exportJSON(scanId);
+        res = await exportJSON(scanId);
         ext = '.json';
       } else if (type === 'csv') {
-        blob = await exportCSV(scanId);
+        res = await exportCSV(scanId);
         ext = '.csv';
       } else {
-        blob = await exportPDF(scanId);
+        res = await exportPDF(scanId);
         ext = '.pdf';
       }
-      const url = URL.createObjectURL(blob);
+      const blob = res.data || res;
+      const url = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${filename}${ext}`;
+      a.download = `${(filename || 'report').replace(/[^a-zA-Z0-9-_]/g,'_')}${ext}`;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
       URL.revokeObjectURL(url);
     } catch {}
   }
@@ -81,16 +85,16 @@ export default function Reports() {
             </TableHeader>
             <TableBody>
               {scans.map((scan) => (
-                <TableRow key={scan.id} className="border-white/[0.06]">
-                  <TableCell className="font-medium text-white">{scan.filename}</TableCell>
-                  <TableCell className="text-slate-400">{scan.total_issues}</TableCell>
+                <TableRow key={scan.id || scan._id} className="border-white/[0.06]">
+                  <TableCell className="font-medium text-white">{scan.file_path || scan.filename || scan.summary?.file_path || 'Report'}</TableCell>
+                  <TableCell className="text-slate-400">{scan.total_issues ?? scan.summary?.total_issues ?? 0}</TableCell>
                   <TableCell>
-                    <Badge className={cn('border', riskColor(scan.risk_level))}>
-                      {scan.risk_level}
+                    <Badge className={cn('border', riskColor(scan.overall_risk || scan.risk_level || scan.summary?.overall_risk || 'low'))}>
+                      {scan.overall_risk || scan.risk_level || scan.summary?.overall_risk || 'low'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-slate-400">
-                    {new Date(scan.created_at).toLocaleDateString()}
+                    {scan.timestamp || scan.created_at ? new Date(scan.timestamp || scan.created_at).toLocaleDateString() : '-'}
                   </TableCell>
                   <TableCell className="text-right">
                     <Dropdown

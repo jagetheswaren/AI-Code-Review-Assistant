@@ -34,7 +34,8 @@ class PerformanceAnalyzer:
                             rule_id="NESTED_LOOP",
                             suggestion="Consider using a hash map/dict for O(1) lookups, or flatten the loop structure",
                             code_snippet=self._get_snippet(lines, child.lineno),
-                            file_path=filename
+                            file_path=filename,
+                            source=["ast_performance"]
                         ))
                     _find_nested_loops(child, depth + 1, type(child))
                 else:
@@ -53,7 +54,8 @@ class PerformanceAnalyzer:
                     rule_id="LARGE_ALLOCATION",
                     suggestion="Use a generator expression instead: (x for x in iterable) instead of [x for x in iterable]",
                     code_snippet=self._get_snippet(lines, node.lineno),
-                    file_path=filename
+                    file_path=filename,
+                    source=["ast_performance"]
                 ))
 
             if isinstance(node, ast.Call):
@@ -67,7 +69,8 @@ class PerformanceAnalyzer:
                         rule_id="FS_SLOW_OP",
                         suggestion="Consider limiting results or using os.scandir() for better performance",
                         code_snippet=self._get_snippet(lines, node.lineno),
-                        file_path=filename
+                        file_path=filename,
+                        source=["ast_performance"]
                     ))
 
     def _check_string_concatenation(self, tree: ast.AST, lines: List[str], filename: str, issues: List[Issue]):
@@ -84,7 +87,8 @@ class PerformanceAnalyzer:
                                 rule_id="STRING_CONCAT_LOOP",
                                 suggestion="Use 'str.join()' or a list and join at the end: parts = []; parts.append(x); result = ''.join(parts)",
                                 code_snippet=self._get_snippet(lines, child.lineno),
-                                file_path=filename
+                                file_path=filename,
+                                source=["ast_performance"]
                             ))
 
     def _check_global_variables(self, tree: ast.AST, lines: List[str], filename: str, issues: List[Issue]):
@@ -103,7 +107,8 @@ class PerformanceAnalyzer:
                 message=f"Too many global variables ({len(global_names)}) - slows attribute lookup",
                 rule_id="TOO_MANY_GLOBALS",
                 suggestion="Group related constants into classes or config modules",
-                file_path=filename
+                file_path=filename,
+                source=["ast_performance"]
             ))
 
     def _check_repeated_computations(self, tree: ast.AST, lines: List[str], filename: str, issues: List[Issue]):
@@ -125,7 +130,8 @@ class PerformanceAnalyzer:
                             message=f"Function '{node.name}' calls '{call_name}' {count} times - consider caching result",
                             rule_id="REPEATED_COMPUTATION",
                             suggestion=f"Cache the result of '{call_name}' in a local variable",
-                            file_path=filename
+                            file_path=filename,
+                            source=["ast_performance"]
                         ))
 
     def _get_call_name(self, node: ast.Call) -> str:

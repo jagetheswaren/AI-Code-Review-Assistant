@@ -76,7 +76,8 @@ class SecurityAnalyzer:
                 rule_id=f"SECURITY_{func_name.upper().replace('.', '_')}",
                 suggestion=self._get_suggestion(func_name),
                 code_snippet=self._get_code_snippet(lines, node.lineno),
-                file_path=file_path
+                file_path=file_path,
+                source=["ast"]
             ))
 
         if func_name in ['subprocess.call', 'subprocess.Popen', 'subprocess.run']:
@@ -90,7 +91,8 @@ class SecurityAnalyzer:
                         rule_id='SECURITY_SHELL_INJECTION',
                         suggestion='Use shell=False and pass arguments as a list',
                         code_snippet=self._get_code_snippet(lines, node.lineno),
-                        file_path=file_path
+                        file_path=file_path,
+                        source=["ast"]
                     ))
 
         return issues
@@ -120,7 +122,8 @@ class SecurityAnalyzer:
                                     rule_id=f'SECURITY_HARDCODED_{pattern.upper()}',
                                     suggestion='Use environment variables or secret management system',
                                     code_snippet=self._get_code_snippet(lines, node.lineno),
-                                    file_path=file_path
+                                    file_path=file_path,
+                                    source=["ast"]
                                 ))
 
         return issues
@@ -152,7 +155,8 @@ class SecurityAnalyzer:
                         rule_id=f'SECURITY_IMPORT_{module.upper()}',
                         suggestion=f'Avoid importing {module} unless necessary; validate all inputs',
                         code_snippet=self._get_code_snippet(lines, node.lineno),
-                        file_path=file_path
+                        file_path=file_path,
+                        source=["ast"]
                     ))
 
         return issues
@@ -182,7 +186,8 @@ class SecurityAnalyzer:
                     rule_id=f"BANDIT_{result.test_id}",
                     suggestion=self._get_bandit_suggestion(result.test_id),
                     code_snippet=self._get_code_snippet(code.splitlines(), result.lineno),
-                    file_path=file_path
+                    file_path=file_path,
+                    source=["bandit"]
                 ))
 
             os.unlink(temp_path)

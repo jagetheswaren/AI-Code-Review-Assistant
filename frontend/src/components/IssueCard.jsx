@@ -44,6 +44,15 @@ const IssueCard = ({ issue, index }) => {
         <span className="type-badge">
           {typeLabels[type]}
         </span>
+        {issue.source && issue.source.length > 0 && (
+          <div className="source-badges" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+            {issue.source.map(src => (
+              <span key={src} className="source-badge" style={{ fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '9999px', backgroundColor: '#e5e7eb', color: '#374151', textTransform: 'uppercase' }}>
+                {src}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="issue-details">
@@ -84,7 +93,7 @@ const IssueCard = ({ issue, index }) => {
           <strong>ML Classified Severity:</strong> 
           <span style={{ color: severityColors[issue.ml_severity] }}>
             {severityLabels[issue.ml_severity]} 
-            ({Math.round((issue.ml_confidence || 0) * 100)}% confidence)
+            ({Math.round((issue.ml_confidence || 0) * 100)}% confidence, {issue.ml_model_version || 'v1'})
           </span>
         </div>
       )}

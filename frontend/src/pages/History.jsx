@@ -19,9 +19,10 @@ export default function History() {
   async function loadHistory() {
     setLoading(true);
     try {
-      const data = await getHistory(page);
+      const res = await getHistory(page);
+      const data = res.data || res;
       setScans(data.scans || []);
-      setTotalPages(data.total_pages || 1);
+      setTotalPages(data.total_pages || data.totalPages || 1);
     } catch {
       setScans([]);
     } finally {
@@ -63,15 +64,15 @@ export default function History() {
             <TableBody>
               {scans.map((scan) => (
                 <TableRow key={scan.id} className="border-white/[0.06]">
-                  <TableCell className="font-medium text-white">{scan.filename}</TableCell>
+                  <TableCell className="font-medium text-white">{scan.file_path}</TableCell>
                   <TableCell className="text-slate-400">{scan.total_issues}</TableCell>
                   <TableCell>
-                    <Badge className={cn('border', riskColor(scan.risk_level))}>
-                      {scan.risk_level}
+                    <Badge className={cn('border', riskColor(scan.overall_risk))}>
+                      {scan.overall_risk}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-slate-400">
-                    {new Date(scan.created_at).toLocaleDateString()}
+                    {new Date(scan.timestamp).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button

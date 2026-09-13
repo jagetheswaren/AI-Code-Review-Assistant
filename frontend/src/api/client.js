@@ -73,14 +73,33 @@ export const getGitHubStatus = () =>
 export const getGitHubRepos = () =>
   api.get('/github/repos');
 
+export const connectGitHubPAT = (token) =>
+  api.post('/github/pat/connect', { token });
+
+export const disconnectGitHub = () =>
+  api.post('/github/disconnect');
+
+export const getRepoInfo = (repoFullName) =>
+  api.get(`/github/repos/${repoFullName}`);
+
 export const getRepoBranches = (repoFullName) =>
   api.get(`/github/repos/${repoFullName}/branches`);
 
 export const getRepoPullRequests = (repoFullName) =>
   api.get(`/github/repos/${repoFullName}/pull-requests`);
 
-export const analyzePullRequest = (repoFullName, prNumber) =>
-  api.post(`/github/repos/${repoFullName}/pull-requests/${prNumber}/analyze`);
+export const getPRDetails = (repoFullName, prNumber) =>
+  api.get(`/github/repos/${repoFullName}/pull-requests/${prNumber}`);
+
+export const getPRFiles = (repoFullName, prNumber) =>
+  api.get(`/github/repos/${repoFullName}/pull-requests/${prNumber}/files`);
+
+export const analyzePullRequest = (repoFullName, prNumber, postComment = false) =>
+  api.post(`/github/repos/${repoFullName}/pull-requests/${prNumber}/analyze`, { post_comment: postComment })
+    .then(res => res.data);
+
+export const postPRComment = (repoFullName, prNumber) =>
+  api.post(`/github/repos/${repoFullName}/pull-requests/${prNumber}/comment`);
 
 export const getNotifications = (params = {}) =>
   api.get('/notifications', { params });
