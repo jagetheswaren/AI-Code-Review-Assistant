@@ -1,0 +1,60 @@
+{
+  "name": "intellireview-ai",
+  "version": "1.1.0",
+  "description": "IntelliReview AI Desktop Application",
+  "main": "main.js",
+  "author": "Jagetheswaren",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.intellireview.ai",
+    "productName": "IntelliReview AI",
+    "directories": {
+      "output": "../dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/backend_out",
+        "to": "backend"
+      },
+      {
+        "from": "../frontend/build",
+        "to": "frontend/build"
+      },
+      {
+        "from": "../docker-compose.yml",
+        "to": "docker-compose.yml"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/IntelliReviewAI.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "IntelliReview AI",
+      "artifactName": "IntelliReview-AI-Setup.exe",
+      "runAfterFinish": true
+    }
+  }
+}

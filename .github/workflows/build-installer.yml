@@ -17,11 +17,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Inno Setup
-        run: choco install innosetup
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
-      - name: Compile Inno Setup script
-        run: '& "C:\Program Files (x86)\Inno Setup 6\iscc.exe" installer\IntelliReviewAI.iss'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build Python Backend (PyInstaller)
+        run: |
+          cd backend
+          python -m venv venv
+          .\venv\Scripts\activate
+          pip install -r requirements.txt
+          pip install pyinstaller
+          pyinstaller --onefile --name backend app.py
+          mkdir -p dist/backend_out
+          mv dist/backend.exe dist/backend_out/
+
+      - name: Build React Frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Build Electron App
+        run: |
+          cd desktop
+          npm install
+          npm run dist
 
       - name: Upload Installer Artifact
         uses: actions/upload-artifact@v4
