@@ -26,6 +26,7 @@ def create_app(*, mongo_client=None, database_name="code_review_assistant"):
     app = Flask(__name__)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.secret_key = settings.jwt_secret
+    app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024  # 2 MB upload limit
 
     app.config.update(
         GITHUB_TOKEN=settings.github_token,
@@ -35,6 +36,8 @@ def create_app(*, mongo_client=None, database_name="code_review_assistant"):
         GITHUB_CLIENT_SECRET=settings.github_client_secret,
         GITHUB_OAUTH_CALLBACK_URL=settings.github_oauth_callback_url,
         FRONTEND_URL=settings.cors_origins.split(",")[0].strip() if settings.cors_origins else "http://localhost:3000",
+        OLLAMA_BASE_URL=settings.ollama_base_url,
+        OLLAMA_MODEL=settings.ollama_model,
     )
 
     CORS(app, resources={r"/api/*": {"origins": settings.allowed_origins}}, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], max_age=86_400,
@@ -82,6 +85,9 @@ def create_app(*, mongo_client=None, database_name="code_review_assistant"):
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error):
+        from werkzeug.exceptions import HTTPException
+        if isinstance(error, HTTPException):
+            return error
         if app.config.get("TESTING"):
             raise error
         app.logger.exception("Unhandled request error: %s %s", request.method, request.path)

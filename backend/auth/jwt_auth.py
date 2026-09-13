@@ -1,5 +1,5 @@
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from functools import wraps
 from flask import request, jsonify, g
@@ -11,12 +11,13 @@ JWT_EXPIRATION_HOURS = 24
 
 
 def create_access_token(user_id: str, email: str, username: str) -> str:
+    now = datetime.now(timezone.utc)
     payload = {
         "user_id": user_id,
         "email": email,
         "username": username,
-        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS),
-        "iat": datetime.utcnow()
+        "exp": now + timedelta(hours=JWT_EXPIRATION_HOURS),
+        "iat": now,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=JWT_ALGORITHM)
 

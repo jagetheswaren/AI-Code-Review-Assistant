@@ -11,6 +11,7 @@ import os
 
 class SecurityAnalyzer:
     SEVERITY_MAP = {
+        'CRITICAL': Severity.CRITICAL,
         'HIGH': Severity.HIGH,
         'MEDIUM': Severity.MEDIUM,
         'LOW': Severity.LOW,
@@ -22,9 +23,27 @@ class SecurityAnalyzer:
     def analyze(self, code: str, file_path: str = "code.py") -> FileAnalysis:
         issues = []
 
-        tree = ast.parse(code)
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            issues.append(Issue(
+                type=IssueType.CODE_SMELL,
+                severity=Severity.MEDIUM,
+                line_number=e.lineno or 1,
+                message=f"Syntax error: {e.msg}",
+                rule_id="SYNTAX_ERROR",
+                suggestion="Fix syntax error before analysis",
+                code_snippet=code.splitlines()[e.lineno - 1] if e.lineno and 0 < e.lineno <= len(code.splitlines()) else "",
+                file_path=file_path,
+                source=["ast"],
+            ))
+            return FileAnalysis(
+                file_path=file_path,
+                language="python",
+                lines_of_code=len(code.splitlines()),
+                issues=issues,
+            )
         issues.extend(self._analyze_ast(tree, code, file_path))
-
         issues.extend(self._run_bandit(code, file_path))
 
         return FileAnalysis(

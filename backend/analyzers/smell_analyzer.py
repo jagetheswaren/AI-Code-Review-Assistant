@@ -1,5 +1,6 @@
 import ast
 import astroid
+from astroid import nodes as astroid_nodes
 from typing import List, Dict, Set
 from models.review import Issue, IssueType, Severity
 
@@ -57,22 +58,32 @@ class SmellAnalyzer:
             source=["pylint"]
         ))
 
-    def _check_unused_imports(self, tree: astroid.Module, code: str):
+    def _check_unused_imports(self, tree: astroid_nodes.Module, code: str):
         try:
-            imports = [node for node in tree.body if isinstance(node, (astroid.Import, astroid.ImportFrom))]
+            imports = [node for node in tree.body if isinstance(node, (astroid_nodes.Import, astroid_nodes.ImportFrom))]
             for imp in imports:
-                if isinstance(imp, astroid.Import):
-                    for name, _ in imp.names:
-                        if not name.startswith('_') and name not in code.replace(f"import {name}", ""):
+                if isinstance(imp, astroid_nodes.Import):
+                    for name, alias in imp.names:
+                        effective = alias or name.split(".")[0]
+                        if effective.startswith('_'):
+                            continue
+                        # Remove the import line itself before checking usage
+                        body_without_import = code.replace(f"import {name}", "")
+                        if alias:
+                            body_without_import = body_without_import.replace(f"as {alias}", "")
+                        if effective not in body_without_import:
                             self._add_issue(
                                 IssueType.CODE_SMELL, Severity.LOW, imp.lineno,
                                 f"Unused import: {name}", "UNUSED_IMPORT",
                                 f"Remove unused import '{name}'"
                             )
-                elif isinstance(imp, astroid.ImportFrom):
-                    for name, _ in imp.names:
-                        full_name = f"{imp.modname}.{name}" if imp.modname else name
-                        if name not in code and not name.startswith('_'):
+                elif isinstance(imp, astroid_nodes.ImportFrom):
+                    for name, alias in imp.names:
+                        effective = alias or name
+                        if effective.startswith('_'):
+                            continue
+                        if effective not in code:
+                            full_name = f"{imp.modname}.{name}" if imp.modname else name
                             self._add_issue(
                                 IssueType.CODE_SMELL, Severity.LOW, imp.lineno,
                                 f"Unused import: {full_name}", "UNUSED_IMPORT_FROM",
@@ -81,31 +92,31 @@ class SmellAnalyzer:
         except Exception:
             pass
 
-    def _check_unused_variables(self, tree: astroid.Module):
+    def _check_unused_variables(self, tree: astroid_nodes.Module):
         try:
             assigned_vars: Set[str] = set()
             used_vars: Set[str] = set()
 
-            for node in tree.nodes_of_class(astroid.Assign):
-                for target in node.targets:
-                    if isinstance(target, astroid.AssignName) and not target.name.startswith('_'):
-                        assigned_vars.add(target.name)
+            for node in tree.nodes_of_class(astroid_nodes.AssignName):
+                # Only count assignments that are direct targets (parent is Assign)
+                if isinstance(node.parent, astroid_nodes.Assign) and not node.name.startswith('_'):
+                    assigned_vars.add(node.name)
 
-            for node in tree.nodes_of_class(astroid.Name):
-                if isinstance(node.ctx, astroid.Load):
+            for node in tree.nodes_of_class(astroid_nodes.Name):
+                if isinstance(node.ctx, astroid_nodes.Load):
                     used_vars.add(node.name)
 
             unused = assigned_vars - used_vars
             for var in unused:
                 if var not in ('_', '__', '___'):
-                    for node in tree.nodes_of_class(astroid.Assign):
-                        for target in node.targets:
-                            if isinstance(target, astroid.AssignName) and target.name == var:
-                                self._add_issue(
-                                    IssueType.CODE_SMELL, Severity.LOW, node.lineno,
-                                    f"Unused variable: {var}", "UNUSED_VARIABLE",
-                                    f"Remove unused variable '{var}' or prefix with '_'"
-                                )
+                    for node in tree.nodes_of_class(astroid_nodes.AssignName):
+                        if node.name == var and isinstance(node.parent, astroid_nodes.Assign):
+                            self._add_issue(
+                                IssueType.CODE_SMELL, Severity.LOW, node.lineno,
+                                f"Unused variable: {var}", "UNUSED_VARIABLE",
+                                f"Remove unused variable '{var}' or prefix with '_'"
+                            )
+                            break
         except Exception:
             pass
 
@@ -169,14 +180,21 @@ class SmellAnalyzer:
         for n in ast.walk(node):
             if isinstance(n, ast.BoolOp):
                 count += len(n.values) - 1
-        return count + 1
+        return count
 
     def _check_magic_numbers(self, tree: ast.AST):
+        # Build parent map because ast nodes don't have .parent by default
+        parent_map: Dict[ast.AST, ast.AST] = {}
+        for parent in ast.walk(tree):
+            for child in ast.iter_child_nodes(parent):
+                parent_map[child] = parent
         for node in ast.walk(tree):
-            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
                 if node.value not in (0, 1, -1, 2, 10, 100, 1000, 1024, 2048):
-                    parent = getattr(node, 'parent', None)
-                    if parent and not isinstance(parent, (ast.Call, ast.Subscript, ast.Attribute, ast.Compare)):
+                    parent = parent_map.get(node)
+                    # Exclude numbers that are part of calls, subscripts, attributes, or comparisons
+                    # (e.g., foo(42), arr[42], obj.attr = 42 in compare context) — flag others
+                    if parent is None or not isinstance(parent, (ast.Call, ast.Subscript, ast.Attribute, ast.Compare)):
                         self._add_issue(
                             IssueType.CODE_SMELL, Severity.INFO, node.lineno,
                             f"Magic number: {node.value}",
@@ -184,8 +202,8 @@ class SmellAnalyzer:
                             "Replace magic number with a named constant"
                         )
 
-    def _check_naming_conventions(self, tree: astroid.Module):
-        for node in tree.nodes_of_class(astroid.FunctionDef):
+    def _check_naming_conventions(self, tree: astroid_nodes.Module):
+        for node in tree.nodes_of_class(astroid_nodes.FunctionDef):
             if not node.name.islower() and '_' not in node.name and not node.name.startswith('_'):
                 self._add_issue(
                     IssueType.CODE_SMELL, Severity.INFO, node.lineno,
@@ -194,7 +212,7 @@ class SmellAnalyzer:
                     f"Rename '{node.name}' to use snake_case"
                 )
 
-        for node in tree.nodes_of_class(astroid.ClassDef):
+        for node in tree.nodes_of_class(astroid_nodes.ClassDef):
             if not node.name[0].isupper() or '_' in node.name:
                 self._add_issue(
                     IssueType.CODE_SMELL, Severity.INFO, node.lineno,
@@ -203,19 +221,18 @@ class SmellAnalyzer:
                     f"Rename '{node.name}' to use PascalCase"
                 )
 
-        for node in tree.nodes_of_class(astroid.Assign):
-            for target in node.targets:
-                if isinstance(target, astroid.AssignName):
-                    if target.name.isupper() and not target.name.startswith('_'):
-                        pass
-                    elif not target.name.islower() and '_' not in target.name and not target.name.startswith('_'):
-                        if target.name not in ('self', 'cls'):
-                            self._add_issue(
-                                IssueType.CODE_SMELL, Severity.INFO, node.lineno,
-                                f"Variable name '{target.name}' should be snake_case",
-                                "NAMING_CONVENTION_VARIABLE",
-                                f"Rename '{target.name}' to use snake_case"
-                            )
+        for node in tree.nodes_of_class(astroid_nodes.AssignName):
+            if isinstance(node.parent, astroid_nodes.Assign):
+                if node.name.isupper() and not node.name.startswith('_'):
+                    continue
+                if not node.name.islower() and '_' not in node.name and not node.name.startswith('_'):
+                    if node.name not in ('self', 'cls'):
+                        self._add_issue(
+                            IssueType.CODE_SMELL, Severity.INFO, node.lineno,
+                            f"Variable name '{node.name}' should be snake_case",
+                            "NAMING_CONVENTION_VARIABLE",
+                            f"Rename '{node.name}' to use snake_case"
+                        )
 
     def _check_dead_code(self, tree: ast.AST):
         for node in ast.walk(tree):

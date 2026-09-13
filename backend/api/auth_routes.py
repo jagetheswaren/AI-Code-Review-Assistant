@@ -6,6 +6,7 @@ from functools import wraps
 from database.mongodb import user_service, scan_service
 from auth.jwt_auth import create_access_token, decode_token
 from models.mongodb_models import UserCreate, UserLogin
+from middleware.security import rate_limit
 
 
 auth_bp = Blueprint('auth', __name__)
@@ -29,6 +30,7 @@ def token_required(f):
 
 
 @auth_bp.route('/api/register', methods=['POST'])
+@rate_limit(max_requests=20, window=60)
 def register():
     data = request.get_json()
     
@@ -71,6 +73,7 @@ def register():
 
 
 @auth_bp.route('/api/login', methods=['POST'])
+@rate_limit(max_requests=30, window=60)
 def login():
     data = request.get_json()
     

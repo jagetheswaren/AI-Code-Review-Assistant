@@ -363,7 +363,7 @@ export default function GitHubIntegration() {
             </div>
           ) : (
             <EmptyState
-              icon={<GithubIcon className="h-12 w-12 text-slate-500" />}
+              icon={GithubIcon}
               title="No repositories found"
               description={
                 search
@@ -382,7 +382,7 @@ export default function GitHubIntegration() {
             <p className="text-xs text-amber-400/80 mt-1">Configure GITHUB_TOKEN or OAuth in backend environment. Connect above when ready.</p>
           </Card>
           <EmptyState
-            icon={<GithubIcon className="h-12 w-12 text-slate-500" />}
+            icon={GithubIcon}
             title="Connect to get started"
             description="Connect your GitHub account above to browse and analyze your repositories."
           />

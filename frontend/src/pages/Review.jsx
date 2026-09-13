@@ -40,10 +40,10 @@ const severityColors = {
 };
 
 const languages = [
-  { value: 'python', label: 'Python' },
-  { value: 'javascript', label: 'JavaScript' },
-  { value: 'java', label: 'Java' },
-  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python (supported)' },
+  { value: 'javascript', label: 'JavaScript (preview)' },
+  { value: 'java', label: 'Java (preview)' },
+  { value: 'typescript', label: 'TypeScript (preview)' },
 ];
 
 function languageFromFilename(name) {
@@ -194,14 +194,12 @@ export default function Review() {
                   <Select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
+                    options={languages}
                     className="bg-white/[0.04] border-white/[0.08] text-white"
-                  >
-                    {languages.map((lang) => (
-                      <option key={lang.value} value={lang.value}>
-                        {lang.label}
-                      </option>
-                    ))}
-                  </Select>
+                  />
+                  {language !== 'python' && (
+                    <p className="text-xs text-amber-400 mt-1">Only Python is fully analyzed; other languages receive limited checks.</p>
+                  )}
                 </div>
                 <Button
                   onClick={handleAnalyze}
@@ -377,18 +375,60 @@ export default function Review() {
             </div>
           )}
 
-          {results.ai_review && (
+          {/* AI availability indicator */}
+          {results.ai_available === false ? (
+            <Card className="bg-amber-950/20 border-amber-500/20">
+              <div className="px-6 py-4 flex items-center gap-3">
+                <Bot className="h-5 w-5 text-amber-400" />
+                <div>
+                  <p className="text-sm font-medium text-amber-300">AI review unavailable</p>
+                  <p className="text-xs text-amber-200/70">{results.ai_error || 'Ollama not reachable — static analysis completed.'}</p>
+                  <p className="text-xs text-slate-500 mt-1">Model: {results.ai_model || 'qwen2.5-coder:7b'} — Static analysis, ML severity, and CodeBERT explanations are still available.</p>
+                </div>
+                <Badge className="ml-auto bg-amber-500/10 text-amber-400 border-amber-500/30">AI OFFLINE</Badge>
+              </div>
+            </Card>
+          ) : results.ai_review && (
             <Card className="bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border-indigo-500/20">
               <div className="px-6 py-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-indigo-500/20 flex items-center justify-center">
                     <Bot className="h-5 w-5 text-indigo-400" />
                   </div>
-                  <h3 className="text-lg font-semibold text-white">AI Review</h3>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-white">AI Review</h3>
+                    <p className="text-xs text-slate-400">Model: {results.ai_model || 'qwen2.5-coder:7b'} {results.ai_structured ? '· Structured' : ''}</p>
+                  </div>
+                  <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">AI ONLINE</Badge>
                 </div>
                 <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
                   {results.ai_review}
                 </div>
+                {results.ai_structured?.issues?.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h4 className="text-sm font-semibold text-white">AI Detected Issues ({results.ai_structured.issues.length})</h4>
+                    {results.ai_structured.issues.map((iss, i) => (
+                      <div key={i} className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Badge className={`text-xs border ${severityColors[iss.severity] || severityColors.info}`}>{iss.severity?.toUpperCase()}</Badge>
+                          <span className="text-xs text-slate-400">{iss.category}</span>
+                          {iss.line && <span className="text-xs text-slate-500 font-mono">Line {iss.line}</span>}
+                        </div>
+                        <p className="text-sm text-white font-medium mt-1">{iss.title}</p>
+                        <p className="text-xs text-slate-400 mt-1">{iss.description}</p>
+                        {iss.suggestion && <p className="text-xs text-emerald-300 mt-1">Fix: {iss.suggestion}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {results.ai_structured?.recommendations?.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-semibold text-white">Recommendations</h4>
+                    <ul className="list-disc list-inside text-xs text-slate-400 mt-1 space-y-1">
+                      {results.ai_structured.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  </div>
+                )}
               </div>
             </Card>
           )}
@@ -398,7 +438,7 @@ export default function Review() {
       {!loading && !results && (
         <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.3 }}>
           <EmptyState
-            icon={<Search className="h-12 w-12 text-slate-500" />}
+            icon={Search}
             title="No analysis yet"
             description="Paste code into the editor or upload a file to get started with AI-powered code review."
           />

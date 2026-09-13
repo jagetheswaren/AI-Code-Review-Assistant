@@ -66,3 +66,35 @@ class MLSeverityClassifier:
                 "logistic_regression": {"accuracy": 0.82, "precision": 0.81, "recall": 0.83, "f1": 0.82}
             }
         }
+
+
+# ---------------------------------------------------------------------------
+# Compatibility shim: expose SeverityClassifier from backend/ml when running
+# from repo root (pytest without backend on sys.path first).  This prevents
+# ImportError: cannot import name 'SeverityClassifier' from 'ml.severity_classifier'
+# when the root ml package shadows backend/ml.
+# ---------------------------------------------------------------------------
+try:
+    import pathlib
+    import importlib.util
+
+    _backend_classifier = pathlib.Path(__file__).resolve().parent.parent / "backend" / "ml" / "severity_classifier.py"
+    if _backend_classifier.exists():
+        _spec = importlib.util.spec_from_file_location("_backend_severity_classifier", str(_backend_classifier))
+        _mod = importlib.util.module_from_spec(_spec)
+        # Avoid recursive load if this file is already the backend one
+        if _spec and _spec.loader:
+            _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
+            # Re-export backend symbols for importers expecting backend API
+            SeverityClassifier = _mod.SeverityClassifier  # type: ignore[attr-defined]
+            FEATURE_VERSION = getattr(_mod, "FEATURE_VERSION", "v2-no-leakage")
+            FEATURE_NAMES_V2 = getattr(_mod, "FEATURE_NAMES_V2", [])
+            FEATURE_NAMES_V1 = getattr(_mod, "FEATURE_NAMES_V1", [])
+            generate_synthetic_training_data = getattr(_mod, "generate_synthetic_training_data", None)
+except Exception:
+    # Fallback alias for minimal compatibility
+    SeverityClassifier = MLSeverityClassifier  # type: ignore[no-redef]
+    FEATURE_VERSION = "v2-no-leakage"
+    FEATURE_NAMES_V2 = []
+    FEATURE_NAMES_V1 = []
+    generate_synthetic_training_data = None

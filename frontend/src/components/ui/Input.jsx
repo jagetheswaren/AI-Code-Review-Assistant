@@ -39,7 +39,7 @@ export const Textarea = React.forwardRef(({ label, error, className, ...props },
 ));
 Textarea.displayName = 'Textarea';
 
-export const Select = React.forwardRef(({ label, error, options = [], className, ...props }, ref) => (
+export const Select = React.forwardRef(({ label, error, options = [], children, className, ...props }, ref) => (
   <div className="space-y-1.5">
     {label && <label className="block text-sm font-medium text-slate-300">{label}</label>}
     <select
@@ -51,7 +51,7 @@ export const Select = React.forwardRef(({ label, error, options = [], className,
       )}
       {...props}
     >
-      {options.map(opt => (
+      {children ? children : options.map(opt => (
         <option key={opt.value} value={opt.value} className="bg-[#1E293B] text-white">{opt.label}</option>
       ))}
     </select>

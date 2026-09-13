@@ -93,6 +93,10 @@ class ScanRecord(BaseModel):
     file_analyses: List[FileAnalysis] = []
     summary: AnalysisSummary = AnalysisSummary()
     ai_review: Optional[str] = None
+    ai_available: bool = True
+    ai_error: Optional[str] = None
+    ai_model: Optional[str] = None
+    ai_structured: Optional[Dict[str, Any]] = None
     github_pr_url: Optional[str] = None
     github_pr_number: Optional[int] = None
     github_repo: Optional[str] = None

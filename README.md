@@ -20,11 +20,18 @@ A full-stack web application that uses **Machine Learning**, **NLP**, and **Stat
 
 ---
 
-## Live Demo
+## 🚀 Live Demo & Download
 
-- **Frontend (Vercel)**: [https://frontend-delta-eight-92.vercel.app](https://frontend-delta-eight-92.vercel.app)
-- **Backend API (Render)**: [https://ai-code-review-api.onrender.com](https://ai-code-review-api.onrender.com)
-- **GitHub Repository**: [https://github.com/jagetheswaren/AI-Code-Review-Assistant](https://github.com/jagetheswaren/AI-Code-Review-Assistant)
+### 🌐 Try it instantly in your browser:
+- **Frontend (Live Demo)**: [https://frontend-delta-eight-92.vercel.app](https://frontend-delta-eight-92.vercel.app)
+- **Backend API**: [https://ai-code-review-api.onrender.com](https://ai-code-review-api.onrender.com)
+
+### 💻 Download the Software (Windows / Mac / Linux):
+Want to run the app on your own computer? Download the official release!
+1. Go to the [**Releases Page**](https://github.com/jagetheswaren/AI-Code-Review-Assistant/releases).
+2. Download the latest `IntelliReview-v1.0.zip`.
+3. Extract the ZIP file.
+4. Run `install-windows.bat` (on Windows) or `install-mac-linux.sh` (on Mac/Linux) to start the app instantly!
 
 ---
 

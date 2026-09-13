@@ -141,16 +141,27 @@ class ScanService:
     def get_user_scan_stats(self, user_id: str) -> Dict[str, Any]:
         scans = self.get_user_scans(user_id, limit=0)
         risks: Dict[str, int] = {}
+        by_type: Dict[str, int] = {}
+        by_severity: Dict[str, int] = {}
         total_issues = 0
         for scan in scans:
             total_issues += scan.summary.total_issues
             risk = scan.summary.overall_risk
             risks[risk] = risks.get(risk, 0) + 1
+            for k, v in (scan.summary.by_type or {}).items():
+                by_type[k] = by_type.get(k, 0) + v
+            for k, v in (scan.summary.by_severity or {}).items():
+                by_severity[k] = by_severity.get(k, 0) + v
         return {
             "total_scans": len(scans), "total_issues": total_issues,
             "avg_issues": round(total_issues / len(scans), 1) if scans else 0,
-            "risk_distribution": risks
+            "risk_distribution": risks,
+            "by_type": by_type,
+            "by_severity": by_severity,
         }
+
+    def count_user_scans(self, user_id: str) -> int:
+        return self.collection.count_documents({"user_id": _object_id(user_id)})
 
     def get_issues_over_time(self, user_id: str, days: int = 30) -> List[Dict[str, Any]]:
         since = datetime.utcnow() - timedelta(days=days)

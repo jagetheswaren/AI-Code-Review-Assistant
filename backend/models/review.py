@@ -67,6 +67,10 @@ class ReviewResponse(BaseModel):
     file_analyses: List[FileAnalysis] = []
     summary: AnalysisSummary = AnalysisSummary()
     ai_review: Optional[str] = None
+    ai_available: bool = True
+    ai_error: Optional[str] = None
+    ai_model: Optional[str] = None
+    ai_structured: Optional[Dict[str, Any]] = None
     github_comment_url: Optional[str] = None
     processing_time_ms: int = 0
 

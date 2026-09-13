@@ -12,6 +12,9 @@ from ml.severity_classifier import SeverityClassifier
 
 github_bp = Blueprint('github', __name__)
 
+# Webhook idempotency guard (in-memory; production should use Redis/DB)
+_processed_deliveries: set[str] = set()
+
 ml_classifier = SeverityClassifier()
 ml_classifier.load()
 
@@ -72,7 +75,8 @@ def github_callback():
     token_response = http_requests.post(
         "https://github.com/login/oauth/access_token",
         json={"client_id": client_id, "client_secret": client_secret, "code": code, "state": state},
-        headers={"Accept": "application/json"}
+        headers={"Accept": "application/json"},
+        timeout=10,
     )
 
     if token_response.status_code != 200:
@@ -85,7 +89,8 @@ def github_callback():
 
     gh_client_response = http_requests.get(
         "https://api.github.com/user",
-        headers={"Authorization": f"token {access_token}", "Accept": "application/vnd.github.v3+json"}
+        headers={"Authorization": f"token {access_token}", "Accept": "application/vnd.github.v3+json"},
+        timeout=10,
     )
 
     if gh_client_response.status_code != 200:
@@ -131,7 +136,8 @@ def github_pat_connect():
     try:
         gh_response = http_requests.get(
             "https://api.github.com/user",
-            headers={"Authorization": f"token {pat_token}", "Accept": "application/vnd.github.v3+json"}
+            headers={"Authorization": f"token {pat_token}", "Accept": "application/vnd.github.v3+json"},
+            timeout=10,
         )
         if gh_response.status_code != 200:
             return jsonify({"error": "Invalid GitHub token"}), 400
@@ -163,36 +169,6 @@ def github_disconnect():
         "avatar_url": None
     })
     return jsonify({"message": "GitHub account disconnected"})
-
-
-@github_bp.route('/api/github/repos/<repo_full_name>', methods=['GET'])
-@token_required
-def get_repo(repo_full_name):
-    user = user_service.get_user_by_id(g.current_user['user_id'])
-    if not user or not user.github_token:
-        return jsonify({"error": "GitHub not connected"}), 400
-    try:
-        from services.github_client import GitHubClient
-        owner, name = repo_full_name.split("/", 1)
-        client = GitHubClient(user.github_token, owner, name)
-        info = client.get_repo_info()
-        return jsonify({
-            "id": info.get("id"),
-            "name": info.get("name"),
-            "full_name": info.get("full_name"),
-            "description": info.get("description"),
-            "language": info.get("language"),
-            "default_branch": info.get("default_branch"),
-            "private": info.get("private", False),
-            "stargazers_count": info.get("stargazers_count", 0),
-            "forks_count": info.get("forks_count", 0),
-            "updated_at": info.get("updated_at"),
-            "html_url": info.get("html_url"),
-            "owner": info.get("owner", {}).get("login")
-        })
-    except Exception as e:
-        current_app.logger.error(f"Failed to fetch repo info: {e}")
-        return jsonify({"error": "Failed to fetch repository"}), 500
 
 
 @github_bp.route('/api/github/repos', methods=['GET'])
@@ -300,7 +276,7 @@ def list_pull_requests(repo_full_name):
         return jsonify({"error": "Failed to fetch pull requests"}), 500
 
 
-@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests/<int:pr_number>', methods=['GET'])
+@github_bp.route('/api/github/repos/<path:repo_full_name>/pull-requests/<int:pr_number>', methods=['GET'])
 @token_required
 def get_pr(repo_full_name, pr_number):
     user = user_service.get_user_by_id(g.current_user['user_id'])
@@ -326,7 +302,7 @@ def get_pr(repo_full_name, pr_number):
         return jsonify({"error": "Failed to fetch PR details"}), 500
 
 
-@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests/<int:pr_number>/files', methods=['GET'])
+@github_bp.route('/api/github/repos/<path:repo_full_name>/pull-requests/<int:pr_number>/files', methods=['GET'])
 @token_required
 def get_pr_files(repo_full_name, pr_number):
     user = user_service.get_user_by_id(g.current_user['user_id'])
@@ -353,7 +329,7 @@ def get_pr_files(repo_full_name, pr_number):
         return jsonify({"error": "Failed to fetch PR files"}), 500
 
 
-@github_bp.route('/api/github/repos/<repo_full_name>/pull-requests/<int:pr_number>/comment', methods=['POST'])
+@github_bp.route('/api/github/repos/<path:repo_full_name>/pull-requests/<int:pr_number>/comment', methods=['POST'])
 @token_required
 def post_pr_comment(repo_full_name, pr_number):
     user = user_service.get_user_by_id(g.current_user['user_id'])
@@ -412,8 +388,14 @@ def analyze_pull_request(repo_full_name, pr_number):
 
         pr_details = client.get_pr_details(pr_number)
         files = client.get_pull_request_files(pr_number)
+        # Preserve patch for AI context (diff) while filtering supported files
+        files_by_name = {f['filename']: f for f in files}
         python_files = [f for f in files if f['filename'].endswith('.py')]
         non_python_files = [f for f in files if not f['filename'].endswith('.py')]
+        # PR size protection: limit to 20 Python files
+        if len(python_files) > 20:
+            current_app.logger.warning(f"PR #{pr_number} has {len(python_files)} Python files, truncating to 20")
+            python_files = python_files[:20]
 
         security_analyzer = SecurityAnalyzer()
         smell_analyzer = SmellAnalyzer()
@@ -513,19 +495,46 @@ def analyze_pull_request(repo_full_name, pr_number):
             file_path=repo_full_name
         )
 
-        code_sample = ""
+        # Build AI context from actual diff (patch) where available, fallback to file content
+        code_sample = f"PR: {repo_full_name} #{pr_number}\n{pr_details.get('title','')}\n{pr_details.get('body','')[:500]}\n\nDiff:\n"
         for file_info in python_files[:3]:
-            content = client.get_file_content(file_info['filename'], pr_details['head']['sha'])
-            if content:
-                code_sample += f"\n# {file_info['filename']}\n{content[:500]}\n"
+            patch = files_by_name.get(file_info['filename'], {}).get('patch')
+            content_source = patch if patch else ""
+            if not content_source:
+                # fallback fetch full content if no patch
+                try:
+                    content_source = client.get_file_content(file_info['filename'], pr_details['head']['sha']) or ""
+                except Exception:
+                    content_source = ""
+            if content_source:
+                truncated = content_source[:2500] + ("\n# ... truncated" if len(content_source) > 2500 else "")
+                code_sample += f"\n# {file_info['filename']}\n{truncated}\n"
 
-        ai_review = ai_reviewer.review_code(code_sample, repo_full_name, all_issues)
+        # Structured AI review with fallback
+        try:
+            ai_res = ai_reviewer.review_code_structured(code_sample, repo_full_name, all_issues)
+            ai_review = ai_res.get("summary") or ai_res.get("raw") or "AI review unavailable; static analysis completed."
+            ai_available = ai_res.get("ai_available", False)
+            ai_error = ai_res.get("error")
+            ai_model = ai_res.get("model")
+            ai_structured = {"issues": ai_res.get("issues", []), "recommendations": ai_res.get("recommendations", []), "raw": ai_res.get("raw")}
+        except Exception as e:
+            current_app.logger.error(f"AI structured review failed in PR analysis: {e}")
+            ai_review = "AI review unavailable; static analysis completed."
+            ai_available = False
+            ai_error = str(e)
+            ai_model = getattr(ai_reviewer, "model", None)
+            ai_structured = None
 
         response = ReviewResponse(
             request_id=str(uuid.uuid4()),
             file_analyses=all_file_analyses,
             summary=summary,
             ai_review=ai_review,
+            ai_available=ai_available,
+            ai_error=ai_error,
+            ai_model=ai_model,
+            ai_structured=ai_structured,
             processing_time_ms=0
         )
 
@@ -536,6 +545,10 @@ def analyze_pull_request(repo_full_name, pr_number):
             file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in all_file_analyses],
             summary=MongoAnalysisSummary.model_validate(summary.model_dump()),
             ai_review=ai_review,
+            ai_available=ai_available,
+            ai_error=ai_error,
+            ai_model=ai_model,
+            ai_structured=ai_structured,
             github_pr_url=f"https://github.com/{repo_full_name}/pull/{pr_number}",
             github_pr_number=pr_number,
             github_repo=repo_full_name,
@@ -558,7 +571,11 @@ def analyze_pull_request(repo_full_name, pr_number):
             "total_issues": len(all_issues),
             "overall_risk": overall_risk,
             "summary": summary.model_dump(),
-            "ai_review": ai_review
+            "ai_review": ai_review,
+            "ai_available": ai_available,
+            "ai_error": ai_error,
+            "ai_model": ai_model,
+            "ai_structured": ai_structured,
         })
 
     except Exception as e:
@@ -582,37 +599,44 @@ def github_webhook():
         if not hmac.compare_digest(expected_signature, signature):
             return jsonify({"error": "Invalid signature"}), 403
 
+    # Idempotency: GitHub delivery ID
+    delivery_id = request.headers.get("X-GitHub-Delivery")
+    if delivery_id:
+        if delivery_id in _processed_deliveries:
+            return jsonify({"message": "Duplicate delivery ignored"}), 200
+        # Keep set bounded to 1000 entries
+        if len(_processed_deliveries) > 1000:
+            _processed_deliveries.clear()
+        _processed_deliveries.add(delivery_id)
+
     event = request.headers.get("X-GitHub-Event")
     if event == "ping":
-        return jsonify({"message": "pong"})
+        return jsonify({"message": "pong"}), 200
     
     if event != "pull_request":
         return jsonify({"message": "Ignored event"}), 200
 
     payload = request.get_json(silent=True) or {}
     action = payload.get("action")
-    
-    # Webhook loop protection: ignore PR updates caused by the bot itself
     sender = payload.get("sender", {}).get("login", "")
-    # Assuming bot account contains 'bot' or matches specific patterns if configured
-    if "bot" in sender.lower() or sender == "intellireview-ai":
-        return jsonify({"message": "Ignored bot event to prevent loop"}), 200
+    repo_full_name = payload.get("repository", {}).get("full_name")
+    owner_login = payload.get("repository", {}).get("owner", {}).get("login")
 
-    # Loop protection: ignore events triggered by our own bot comments or by synchronize from bot pushes
-    sender = payload.get("sender", {}).get("login", "")
-    if sender and sender == owner_login and payload.get("pull_request", {}).get("user", {}).get("login") == sender:
-        # If sender is bot-like and matches owner, still verify but avoid duplicate if recent
-        pass
-    # Ignore issue_comment events that are not pull_request
-    if sender and "[bot]" in sender:
-        return jsonify({"message": "Ignored bot event (loop protection)"}), 200
+    # Webhook loop protection: ignore events caused by bots to prevent infinite loops
+    if sender:
+        lower_sender = sender.lower()
+        if "bot" in lower_sender or "[bot]" in sender or sender == "intellireview-ai":
+            return jsonify({"message": "Ignored bot event to prevent loop"}), 200
+        # Ignore events triggered by our own bot comments or by synchronize from bot pushes
+        pr_user = payload.get("pull_request", {}).get("user", {}).get("login", "")
+        if pr_user and sender == owner_login and sender == pr_user:
+            # Sender is both repo owner and PR author in a bot-like context — still process but avoid duplicate
+            pass
 
     if action not in ["opened", "synchronize", "reopened"]:
         return jsonify({"message": f"Ignored PR action: {action}"}), 200
 
-    repo_full_name = payload.get("repository", {}).get("full_name")
     pr_number = payload.get("pull_request", {}).get("number")
-    owner_login = payload.get("repository", {}).get("owner", {}).get("login")
 
     if not repo_full_name or not pr_number:
         return jsonify({"error": "Invalid payload"}), 400
@@ -650,10 +674,15 @@ def github_webhook():
                 
                 pr_details = client.get_pr_details(pr_number)
                 files = client.get_pull_request_files(pr_number)
+                files_by_name_bg = {f['filename']: f for f in files}
                 python_files = [f for f in files if f['filename'].endswith('.py')]
 
                 if not python_files:
                     return
+                # PR size protection: limit to 20 Python files max
+                if len(python_files) > 20:
+                    app.logger.warning(f"PR #{pr_number} has {len(python_files)} Python files, truncating to 20")
+                    python_files = python_files[:20]
 
                 security_analyzer = SecurityAnalyzer()
                 smell_analyzer = SmellAnalyzer()
@@ -744,19 +773,43 @@ def github_webhook():
                     file_path=repo_full_name
                 )
 
-                code_sample = ""
+                code_sample = f"PR: {repo_full_name} #{pr_number}\n{pr_details.get('title','')}\n{pr_details.get('body','')[:500]}\n\nDiff:\n"
                 for file_info in python_files[:3]:
-                    content = client.get_file_content(file_info['filename'], pr_details['head']['sha'])
-                    if content:
-                        code_sample += f"\n# {file_info['filename']}\n{content[:500]}\n"
+                    patch = files_by_name_bg.get(file_info['filename'], {}).get('patch')
+                    content_source = patch if patch else ""
+                    if not content_source:
+                        try:
+                            content_source = client.get_file_content(file_info['filename'], pr_details['head']['sha']) or ""
+                        except Exception:
+                            content_source = ""
+                    if content_source:
+                        truncated = content_source[:2500] + ("\n# ... truncated" if len(content_source) > 2500 else "")
+                        code_sample += f"\n# {file_info['filename']}\n{truncated}\n"
 
-                ai_review = ai_reviewer.review_code(code_sample, repo_full_name, all_issues)
+                try:
+                    ai_res_bg = ai_reviewer.review_code_structured(code_sample, repo_full_name, all_issues)
+                    ai_review = ai_res_bg.get("summary") or ai_res_bg.get("raw") or "AI review unavailable; static analysis completed."
+                    ai_available_bg = ai_res_bg.get("ai_available", False)
+                    ai_error_bg = ai_res_bg.get("error")
+                    ai_model_bg = ai_res_bg.get("model")
+                    ai_structured_bg = {"issues": ai_res_bg.get("issues", []), "recommendations": ai_res_bg.get("recommendations", []), "raw": ai_res_bg.get("raw")}
+                except Exception as e:
+                    app.logger.error(f"AI review failed in webhook: {e}")
+                    ai_review = "AI review unavailable; static analysis completed."
+                    ai_available_bg = False
+                    ai_error_bg = str(e)
+                    ai_model_bg = getattr(ai_reviewer, "model", None)
+                    ai_structured_bg = None
 
                 response = ReviewResponse(
                     request_id=str(uuid.uuid4()),
                     file_analyses=all_file_analyses,
                     summary=summary,
                     ai_review=ai_review,
+                    ai_available=ai_available_bg,
+                    ai_error=ai_error_bg,
+                    ai_model=ai_model_bg,
+                    ai_structured=ai_structured_bg,
                     processing_time_ms=0
                 )
 
@@ -766,6 +819,10 @@ def github_webhook():
                     file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in all_file_analyses],
                     summary=MongoAnalysisSummary.model_validate(summary.model_dump()),
                     ai_review=ai_review,
+                    ai_available=ai_available_bg,
+                    ai_error=ai_error_bg,
+                    ai_model=ai_model_bg,
+                    ai_structured=ai_structured_bg,
                     github_pr_url=f"https://github.com/{repo_full_name}/pull/{pr_number}",
                     github_pr_number=pr_number,
                     github_repo=repo_full_name,

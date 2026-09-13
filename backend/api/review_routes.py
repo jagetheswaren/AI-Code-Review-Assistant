@@ -19,6 +19,7 @@ from services.github_client import GitHubClient, create_github_client
 from reviewer.github_commenter import GitHubCommenter
 from auth.jwt_auth import decode_token
 from ml.severity_classifier import SeverityClassifier
+from config import settings
 
 
 review_bp = Blueprint('review', __name__)
@@ -61,6 +62,8 @@ def analyze_code():
     code = data['code']
     if not isinstance(code, str) or not code.strip():
         return jsonify({"error": "Code is required and must be non-empty"}), 400
+    if len(code) > 500_000:
+        return jsonify({"error": "Code too large (max 500KB)"}), 413
     filename = data.get('filename', 'code.py')
     github_pr_url = data.get('github_pr_url')
     github_pr_number = data.get('github_pr_number')
@@ -112,7 +115,21 @@ def _perform_analysis(code: str, filename: str, github_pr_url=None, github_pr_nu
         except Exception:
             pass
 
-    ai_review = ai_reviewer.review_code(code, filename, all_issues)
+    # Structured AI review with timeout and fallback handling
+    try:
+        ai_result = ai_reviewer.review_code_structured(code, filename, all_issues)
+        ai_review = ai_result.get("summary") or ai_result.get("raw") or "AI review unavailable; static analysis completed."
+        ai_available = ai_result.get("ai_available", False)
+        ai_error = ai_result.get("error")
+        ai_model = ai_result.get("model")
+        ai_structured = {"issues": ai_result.get("issues", []), "recommendations": ai_result.get("recommendations", []), "raw": ai_result.get("raw")}
+    except Exception as e:
+        current_app.logger.error(f"AI structured review failed: {e}")
+        ai_review = "AI review unavailable; static analysis completed."
+        ai_available = False
+        ai_error = str(e)
+        ai_model = getattr(ai_reviewer, "model", None)
+        ai_structured = None
 
     file_analysis = FileAnalysis(
         file_path=filename,
@@ -142,6 +159,10 @@ def _perform_analysis(code: str, filename: str, github_pr_url=None, github_pr_nu
         file_analyses=[file_analysis],
         summary=summary,
         ai_review=ai_review,
+        ai_available=ai_available,
+        ai_error=ai_error,
+        ai_model=ai_model,
+        ai_structured=ai_structured,
         processing_time_ms=int((time.time() - start_time) * 1000)
     )
 
@@ -152,6 +173,10 @@ def _perform_analysis(code: str, filename: str, github_pr_url=None, github_pr_nu
             file_analyses=[MongoFileAnalysis.model_validate(file_analysis.model_dump())],
             summary=MongoAnalysisSummary.model_validate(summary.model_dump()),
             ai_review=ai_review,
+            ai_available=ai_available,
+            ai_error=ai_error,
+            ai_model=ai_model,
+            ai_structured=ai_structured,
             github_pr_url=github_pr_url,
             github_pr_number=github_pr_number,
             github_repo=github_repo,
@@ -181,7 +206,10 @@ def analyze_file():
         return jsonify({"error": "Only Python files (.py) are supported"}), 400
 
     try:
-        code = file.read().decode('utf-8')
+        raw = file.read()
+        if len(raw) > 1_000_000:
+            return jsonify({"error": "File too large (max 1MB)"}), 413
+        code = raw.decode('utf-8')
     except Exception:
         return jsonify({"error": "Failed to decode file as UTF-8"}), 400
     filename = file.filename
@@ -336,6 +364,51 @@ def health_check():
     return jsonify({"status": "healthy", "service": "code-review-assistant"}), 200
 
 
+@review_bp.route('/api/ai/health', methods=['GET'])
+def ai_health():
+    """Proxy to Ollama /api/tags to verify AI availability without exposing internal URL."""
+    try:
+        import requests
+        base = current_app.config.get('OLLAMA_BASE_URL') or settings.ollama_base_url
+        # Ensure config exposes ollama info even if not in app.config
+        if not base:
+            base = settings.ollama_base_url
+        url = base.rstrip("/") + "/api/tags"
+        resp = requests.get(url, timeout=5)
+        if resp.status_code != 200:
+            return jsonify({"ai_available": False, "reachable": False, "error": f"HTTP {resp.status_code}", "model": settings.ollama_model, "base_url": base}), 200
+        data = resp.json()
+        models = [m.get("name") for m in data.get("models", [])]
+        model_found = settings.ollama_model in models or any(settings.ollama_model.split(":")[0] in m for m in models)
+        return jsonify({
+            "ai_available": model_found,
+            "reachable": True,
+            "models": models,
+            "expected_model": settings.ollama_model,
+            "base_url": base,
+            "error": None if model_found else f"Model '{settings.ollama_model}' not found",
+        }), 200
+    except Exception as e:
+        base = current_app.config.get('OLLAMA_BASE_URL') or settings.ollama_base_url
+        return jsonify({"ai_available": False, "reachable": False, "error": str(e), "model": settings.ollama_model, "base_url": base}), 200
+
+
+@review_bp.route('/api/ai/status', methods=['GET'])
+def ai_status():
+    """Detailed AI status including Ollama health and model check."""
+    health = ai_reviewer.check_health()
+    available, msg = ai_reviewer.is_model_available()
+    return jsonify({
+        "ai_available": available,
+        "reachable": health["reachable"],
+        "models": health["models"],
+        "expected_model": ai_reviewer.model,
+        "base_url": ai_reviewer.base_url,
+        "error": msg if not available else None,
+        "ollama_error": health["error"],
+    }), 200
+
+
 @review_bp.route('/api/statistics', methods=['GET'])
 @review_bp.route('/api/stats', methods=['GET'])
 @token_required
@@ -364,9 +437,17 @@ def get_history():
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
-        
+        per_page = max(1, min(per_page, 100))
         scans = scan_service.get_user_scans(user_id, page=page, per_page=per_page)
-        return jsonify({"scans": [_scan_summary(scan) for scan in scans]}), 200
+        total = scan_service.count_user_scans(user_id)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        return jsonify({
+            "scans": [_scan_summary(scan) for scan in scans],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }), 200
     except Exception as e:
         current_app.logger.error(f"Failed to get history: {e}")
         return jsonify({"error": "Failed to get history"}), 500

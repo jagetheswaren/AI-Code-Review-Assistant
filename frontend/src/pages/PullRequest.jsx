@@ -228,7 +228,7 @@ export default function PullRequest(){
         </motion.div>
       )}
 
-      {!loading && !results && <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{delay:0.2}}><EmptyState icon={<GitPullRequest className="h-12 w-12 text-slate-500"/>} title="Ready to analyze" description="Review changed files above, then click Analyze to run Bandit + AST + Radon + ML + Ollama." /></motion.div>}
+      {!loading && !results && <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{delay:0.2}}><EmptyState icon={GitPullRequest} title="Ready to analyze" description="Review changed files above, then click Analyze to run Bandit + AST + Radon + ML + Ollama." /></motion.div>}
     </div>
   );
 }

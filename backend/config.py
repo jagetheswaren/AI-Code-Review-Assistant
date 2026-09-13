@@ -7,8 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     github_token: Optional[str] = None
     github_webhook_secret: Optional[str] = None
-    ollama_model: str = "qwen2.5-coder:3b"
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5-coder:7b"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_timeout: int = 60
+    ollama_max_code_chars: int = 12000
     flask_env: str = "development"
     flask_port: int = 5000
     cors_origins: str = "http://localhost:3000"
