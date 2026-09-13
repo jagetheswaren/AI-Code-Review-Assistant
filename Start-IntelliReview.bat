@@ -61,7 +61,9 @@ if %ERRORLEVEL% neq 0 (
     ollama list | findstr "qwen2.5-coder:7b" >nul 2>&1
     if !ERRORLEVEL! neq 0 (
         echo [WARNING] The required AI model qwen2.5-coder:7b is not installed.
-        echo Please open a terminal and run: ollama run qwen2.5-coder:7b
+        echo Please open a terminal or command prompt and run exactly this command:
+        echo     ollama run qwen2.5-coder:7b
+        echo Once the model finishes downloading, you can restart this application.
         pause
     )
 )

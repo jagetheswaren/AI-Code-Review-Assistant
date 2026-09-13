@@ -1,13 +1,16 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-title IntelliReview AI - Installer
+set SILENT_MODE=0
+if "%~1"=="--silent" set SILENT_MODE=1
+
+title IntelliReview AI - Local Environment Setup
 
 echo ===================================================
-echo     IntelliReview AI - Automated Installer
+echo     IntelliReview AI - Environment Setup
 echo ===================================================
 echo.
-echo This script will set up the application on your PC.
+echo This script will set up the local application environment.
 echo Requirements: Python 3.11+, Node.js 18+, Docker Desktop
 echo.
 
@@ -25,7 +28,7 @@ call ".\venv\Scripts\activate.bat"
 pip install -r requirements.txt
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to install Python dependencies. Please ensure Python 3.11+ is installed.
-    pause
+    if %SILENT_MODE%==0 pause
     exit /b
 )
 cd ..
@@ -38,7 +41,7 @@ if not exist "node_modules" (
 )
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Failed to install Node dependencies. Please ensure Node.js is installed.
-    pause
+    if %SILENT_MODE%==0 pause
     exit /b
 )
 cd ..
@@ -60,7 +63,7 @@ if exist "start-intellireview.bat" (
 
 echo.
 echo ===================================================
-echo                 INSTALLATION COMPLETE!
+echo                 SETUP COMPLETE!
 echo ===================================================
 echo.
 echo A shortcut named "IntelliReview AI" has been placed on your Desktop!
@@ -71,5 +74,5 @@ echo 2. (Optional) Ensure Ollama is installed to enable AI features.
 echo.
 echo To start the app, simply double-click the "IntelliReview AI" icon on your Desktop!
 echo.
-pause
+if %SILENT_MODE%==0 pause
 exit

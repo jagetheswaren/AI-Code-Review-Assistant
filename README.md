@@ -28,12 +28,22 @@ A full-stack web application that uses **Machine Learning**, **NLP**, and **Stat
 
 ### 💻 Download the Software (Windows):
 Want to run the app completely locally on your own computer? Download the official installer!
+
+**Before downloading, you MUST install these prerequisites on your computer:**
+- [Python 3.11+](https://www.python.org/downloads/) (Make sure to check "Add python.exe to PATH" during installation)
+- [Node.js 18+](https://nodejs.org/en/download/)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Required for local MongoDB)
+- [Ollama](https://ollama.com/) (Required for local AI)
+
+Once the prerequisites are installed:
 1. Go to the [**Releases Page**](https://github.com/jagetheswaren/AI-Code-Review-Assistant/releases).
 2. Download `IntelliReview-AI-Setup.exe`.
 3. Open the downloaded installer.
 4. Click **Next** -> **Install** -> **Finish**.
 5. IntelliReview AI will create a desktop shortcut and install all necessary dependencies (Note: downloading dependencies may take a few minutes on first run).
 6. Double-click the **IntelliReview AI** icon on your desktop to launch the application.
+
+> **Note on AI Model**: The first time you launch the app, it will check for the `qwen2.5-coder:7b` model. If you don't have it, it will provide instructions on how to download it via Ollama.
 
 ---
 
