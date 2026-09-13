@@ -1,0 +1,9 @@
+time="2026-09-14T00:40:30+05:30" level=warning msg="C:\\Users\\jaget\\AI-Code-Review-Assistant\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Network ai-code-review-network Creating 
+ Network ai-code-review-network Created 
+ Volume ai-code-review-assistant_mongodb_data Creating 
+ Volume ai-code-review-assistant_mongodb_data Created 
+ Container ai-code-review-mongodb Creating 
+ Container ai-code-review-mongodb Created 
+ Container ai-code-review-mongodb Starting 
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint ai-code-review-mongodb (f2d3a074f8d05719ab8ba30eaa5654e00977ccb448c4e700ece2d21ec944e537): Bind for 0.0.0.0:27017 failed: port is already allocated
