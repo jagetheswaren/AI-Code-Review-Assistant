@@ -4,12 +4,6 @@ import time
 from typing import Dict, Any, List
 from functools import wraps
 
-from analyzers.security_analyzer import SecurityAnalyzer
-from analyzers.smell_analyzer import SmellAnalyzer
-from analyzers.complexity_analyzer import ComplexityAnalyzer
-from analyzers.performance_analyzer import PerformanceAnalyzer
-from reviewer.ai_reviewer import AIReviewer
-from reviewer.aggregator import FindingAggregator
 from models.review import ReviewRequest, ReviewResponse, AnalysisSummary, FileAnalysis, Issue, IssueType, Severity
 from models.mongodb_models import AnalysisSummary as MongoAnalysisSummary
 from models.mongodb_models import FileAnalysis as MongoFileAnalysis
@@ -18,20 +12,11 @@ from database.mongodb import scan_service
 from services.github_client import GitHubClient, create_github_client
 from reviewer.github_commenter import GitHubCommenter
 from auth.jwt_auth import decode_token
-from ml.severity_classifier import SeverityClassifier
 from config import settings
-
+from services.analysis_service import analysis_service
+from middleware.security import rate_limit
 
 review_bp = Blueprint('review', __name__)
-
-security_analyzer = SecurityAnalyzer()
-smell_analyzer = SmellAnalyzer()
-complexity_analyzer = ComplexityAnalyzer()
-performance_analyzer = PerformanceAnalyzer()
-ai_reviewer = AIReviewer()
-aggregator = FindingAggregator()
-ml_classifier = SeverityClassifier()
-ml_classifier.load()
 
 
 def token_required(f):
@@ -54,6 +39,7 @@ def token_required(f):
 
 
 @review_bp.route('/api/analyze', methods=['POST'])
+@rate_limit(max_requests=20, window=60)
 @token_required
 def analyze_code():
     data = request.get_json()
@@ -73,110 +59,22 @@ def analyze_code():
 
 def _perform_analysis(code: str, filename: str, github_pr_url=None, github_pr_number=None, github_repo=None):
     """Shared analysis logic used by both /api/analyze and /api/analyze/file."""
-    start_time = time.time()
     user_id = g.current_user.get('user_id') if hasattr(g, 'current_user') else None
-    request_id = str(uuid.uuid4())
 
-    security_issues = security_analyzer.analyze(code, filename)
-    smell_issues = smell_analyzer.analyze(code, filename)
-    complexity_issues = complexity_analyzer.analyze(code, filename)
-    performance_issues = performance_analyzer.analyze(code, filename)
-
-    all_issues = security_issues.issues + smell_issues + complexity_issues + performance_issues
-    all_issues = aggregator.merge_findings(all_issues)
-
-    for issue in all_issues:
-        try:
-            ai_reviewer.enhance_issue_with_nlp(issue, code[:2000])
-            if "codebert" not in issue.source:
-                issue.source.append("codebert")
-        except Exception:
-            issue.explanation = issue.message
-            issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
-
-        try:
-            ml_issue = {
-                "type": issue.type.value,
-                "severity": issue.severity.value,
-                "line_number": issue.line_number,
-                "message": issue.message,
-                "rule_id": issue.rule_id or "",
-                "suggestion": issue.suggestion,
-                "code_snippet": issue.code_snippet,
-                "explanation": issue.explanation,
-            }
-            ml_result = ml_classifier.predict([ml_issue])[0]
-            if ml_classifier.is_trained:
-                issue.ml_severity = ml_result["ml_severity"]
-                issue.ml_confidence = ml_result["ml_confidence"]
-                issue.ml_model_version = ml_result.get("ml_model_version")
-                if "ml" not in issue.source:
-                    issue.source.append("ml")
-        except Exception:
-            pass
-
-    # Structured AI review with timeout and fallback handling
-    try:
-        ai_result = ai_reviewer.review_code_structured(code, filename, all_issues)
-        ai_review = ai_result.get("summary") or ai_result.get("raw") or "AI review unavailable; static analysis completed."
-        ai_available = ai_result.get("ai_available", False)
-        ai_error = ai_result.get("error")
-        ai_model = ai_result.get("model")
-        ai_structured = {"issues": ai_result.get("issues", []), "recommendations": ai_result.get("recommendations", []), "raw": ai_result.get("raw")}
-    except Exception as e:
-        current_app.logger.error(f"AI structured review failed: {e}")
-        ai_review = "AI review unavailable; static analysis completed."
-        ai_available = False
-        ai_error = str(e)
-        ai_model = getattr(ai_reviewer, "model", None)
-        ai_structured = None
-
-    file_analysis = FileAnalysis(
-        file_path=filename,
-        language="python",
-        lines_of_code=len(code.split('\n')),
-        issues=all_issues
-    )
-
-    by_type = {}
-    by_severity = {}
-    for issue in all_issues:
-        by_type[issue.type.value] = by_type.get(issue.type.value, 0) + 1
-        by_severity[issue.severity.value] = by_severity.get(issue.severity.value, 0) + 1
-
-    overall_risk = _calculate_overall_risk(by_severity)
-
-    summary = AnalysisSummary(
-        total_issues=len(all_issues),
-        by_type=by_type,
-        by_severity=by_severity,
-        overall_risk=overall_risk,
-        file_path=filename
-    )
-
-    response = ReviewResponse(
-        request_id=request_id,
-        file_analyses=[file_analysis],
-        summary=summary,
-        ai_review=ai_review,
-        ai_available=ai_available,
-        ai_error=ai_error,
-        ai_model=ai_model,
-        ai_structured=ai_structured,
-        processing_time_ms=int((time.time() - start_time) * 1000)
-    )
+    file_contents = [{"filename": filename, "content": code}]
+    response = analysis_service.analyze_files(file_contents)
 
     try:
         scan = ScanRecord(
             user_id=user_id,
-            request_id=request_id,
-            file_analyses=[MongoFileAnalysis.model_validate(file_analysis.model_dump())],
-            summary=MongoAnalysisSummary.model_validate(summary.model_dump()),
-            ai_review=ai_review,
-            ai_available=ai_available,
-            ai_error=ai_error,
-            ai_model=ai_model,
-            ai_structured=ai_structured,
+            request_id=response.request_id,
+            file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in response.file_analyses],
+            summary=MongoAnalysisSummary.model_validate(response.summary.model_dump()),
+            ai_review=response.ai_review,
+            ai_available=response.ai_available,
+            ai_error=response.ai_error,
+            ai_model=response.ai_model,
+            ai_structured=response.ai_structured,
             github_pr_url=github_pr_url,
             github_pr_number=github_pr_number,
             github_repo=github_repo,
@@ -193,6 +91,7 @@ def _perform_analysis(code: str, filename: str, github_pr_url=None, github_pr_nu
 
 
 @review_bp.route('/api/analyze/file', methods=['POST'])
+@rate_limit(max_requests=20, window=60)
 @token_required
 def analyze_file():
     if 'file' not in request.files:
@@ -218,6 +117,7 @@ def analyze_file():
 
 
 @review_bp.route('/api/webhook/github', methods=['POST'])
+@rate_limit(max_requests=60, window=60)
 def github_webhook():
     # Deprecated alias — canonical is /api/github/webhook (github_routes). Kept for backward compatibility.
     current_app.logger.warning("Deprecated webhook path /api/webhook/github used — prefer /api/github/webhook")
@@ -257,51 +157,18 @@ def github_webhook():
     if not python_files:
         return jsonify({"message": "No Python files in PR"}), 200
 
-    reviews = []
+    file_contents = []
     for file_info in python_files:
         filename = file_info['filename']
         content = client.get_file_content(filename, head_sha)
-        if not content:
-            continue
+        if content:
+            file_contents.append({"filename": filename, "content": content})
 
-        security_issues = security_analyzer.analyze(content, filename)
-        smell_issues = smell_analyzer.analyze(content, filename)
-        complexity_issues = complexity_analyzer.analyze(content, filename)
+    if not file_contents:
+        return jsonify({"message": "No valid Python files to review"}), 200
 
-        all_issues = security_issues.issues + smell_issues + complexity_issues
-        all_issues = aggregator.merge_findings(all_issues)
-        ai_review = ai_reviewer.review_code(content, filename, all_issues)
-
-        file_analysis = FileAnalysis(
-            file_path=filename,
-            language="python",
-            lines_of_code=len(content.split('\n')),
-            issues=all_issues
-        )
-
-        by_type = {}
-        by_severity = {}
-        for issue in all_issues:
-            by_type[issue.type.value] = by_type.get(issue.type.value, 0) + 1
-            by_severity[issue.severity.value] = by_severity.get(issue.severity.value, 0) + 1
-
-        overall_risk = _calculate_overall_risk(by_severity)
-
-        summary = AnalysisSummary(
-            total_issues=len(all_issues),
-            by_type=by_type,
-            by_severity=by_severity,
-            overall_risk=overall_risk,
-            file_path=filename
-        )
-
-        review = ReviewResponse(
-            request_id=str(uuid.uuid4()),
-            file_analyses=[file_analysis],
-            summary=summary,
-            ai_review=ai_review
-        )
-        reviews.append(review)
+    response = analysis_service.analyze_files(file_contents)
+    reviews = [response]  # Keep it as a list for compatibility if needed
 
     commenter = GitHubCommenter(client)
     summary_comment = commenter.format_pr_summary_comment(reviews)
@@ -396,17 +263,37 @@ def ai_health():
 @review_bp.route('/api/ai/status', methods=['GET'])
 def ai_status():
     """Detailed AI status including Ollama health and model check."""
-    health = ai_reviewer.check_health()
-    available, msg = ai_reviewer.is_model_available()
+    health = analysis_service.ai_reviewer.check_health()
+    available, msg = analysis_service.ai_reviewer.is_model_available()
+    
+    ml_info = analysis_service.ml_classifier.get_model_info() if analysis_service.ml_classifier else None
+    
     return jsonify({
         "ai_available": available,
         "reachable": health["reachable"],
         "models": health["models"],
-        "expected_model": ai_reviewer.model,
-        "base_url": ai_reviewer.base_url,
+        "expected_model": analysis_service.ai_reviewer.model,
+        "base_url": analysis_service.ai_reviewer.base_url,
         "error": msg if not available else None,
         "ollama_error": health["error"],
+        "ml_model_info": ml_info
     }), 200
+
+
+@review_bp.route('/api/admin/model/reload', methods=['POST'])
+@token_required
+def reload_ml_model():
+    """Admin route to reload the ML severity classifier model from disk."""
+    try:
+        success = analysis_service.ml_classifier.load()
+        if success:
+            info = analysis_service.ml_classifier.get_model_info()
+            return jsonify({"message": "Model reloaded successfully", "info": info}), 200
+        else:
+            return jsonify({"error": "Failed to reload model, check logs"}), 500
+    except Exception as e:
+        current_app.logger.error(f"Failed to reload ML model: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @review_bp.route('/api/statistics', methods=['GET'])

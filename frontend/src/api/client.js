@@ -144,4 +144,10 @@ export const exportCSV = (scanId) =>
 export const exportPDF = (scanId) =>
   api.get(`/export/pdf/${scanId}`, { responseType: 'blob' });
 
+export const getAiStatus = () =>
+  api.get('/ai/status');
+
+export const reloadMlModel = () =>
+  api.post('/admin/model/reload');
+
 export default api;

@@ -173,8 +173,9 @@ export default function PullRequest(){
       {/* Results */}
       {results && (
         <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{delay:0.2}} className="space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {[
+              {label:'Health', val: summary.health_score ?? 100, color:'text-green-400'},
               {label:'Total', val: totalIssues, color:'text-white'},
               {label:'Critical', val: bySev.critical||0, color:'text-red-400'},
               {label:'High', val: bySev.high||0, color:'text-orange-400'},

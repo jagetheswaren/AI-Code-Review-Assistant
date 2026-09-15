@@ -52,6 +52,7 @@ Once the prerequisites are installed:
 | **Security Analysis** | Bandit integration + custom AST analysis for vulnerabilities |
 | **Code Smell Detection** | Pylint-style checks for unused imports, long functions, etc. |
 | **Performance Analysis** | Nested loops, N+1 queries, string concatenation in loops |
+| **Code Health Score** | Quantitative metric tracking project quality based on issue severities |
 | **ML Severity Prediction** | Random Forest, Gradient Boosting, Logistic Regression models |
 | **NLP Explanations** | CodeBERT-powered issue explanations and fix suggestions |
 | **GitHub Integration** | OAuth, repo browsing, PR analysis, automated review comments |

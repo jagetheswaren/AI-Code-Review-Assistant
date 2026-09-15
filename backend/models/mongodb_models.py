@@ -76,6 +76,7 @@ class AnalysisSummary(BaseModel):
     by_type: Dict[str, int] = {}
     by_severity: Dict[str, int] = {}
     overall_risk: str = "none"
+    health_score: int = 100
     file_path: str = ""
 
 

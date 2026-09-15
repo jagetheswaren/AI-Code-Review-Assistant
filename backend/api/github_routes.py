@@ -8,15 +8,13 @@ import requests as http_requests
 from functools import wraps
 from database.mongodb import user_service, repo_service, pr_service
 from auth.jwt_auth import create_access_token, decode_token
-from ml.severity_classifier import SeverityClassifier
+from services.analysis_service import analysis_service
+from middleware.security import rate_limit
 
 github_bp = Blueprint('github', __name__)
 
 # Webhook idempotency guard (in-memory; production should use Redis/DB)
 _processed_deliveries: set[str] = set()
-
-ml_classifier = SeverityClassifier()
-ml_classifier.load()
 
 
 def token_required(f):
@@ -374,12 +372,6 @@ def analyze_pull_request(repo_full_name, pr_number):
 
     try:
         from services.github_client import GitHubClient
-        from analyzers.security_analyzer import SecurityAnalyzer
-        from analyzers.smell_analyzer import SmellAnalyzer
-        from analyzers.complexity_analyzer import ComplexityAnalyzer
-        from analyzers.performance_analyzer import PerformanceAnalyzer
-        from reviewer.ai_reviewer import AIReviewer
-        from reviewer.aggregator import FindingAggregator
         from models.review import ReviewResponse, FileAnalysis, AnalysisSummary, Issue
         import uuid
         import time
@@ -389,120 +381,27 @@ def analyze_pull_request(repo_full_name, pr_number):
 
         pr_details = client.get_pr_details(pr_number)
         files = client.get_pull_request_files(pr_number)
-        # Preserve patch for AI context (diff) while filtering supported files
+        
         files_by_name = {f['filename']: f for f in files}
         python_files = [f for f in files if f['filename'].endswith('.py')]
         non_python_files = [f for f in files if not f['filename'].endswith('.py')]
-        # PR size protection: limit to 20 Python files
+        
         if len(python_files) > 20:
             current_app.logger.warning(f"PR #{pr_number} has {len(python_files)} Python files, truncating to 20")
             python_files = python_files[:20]
 
-        security_analyzer = SecurityAnalyzer()
-        smell_analyzer = SmellAnalyzer()
-        complexity_analyzer = ComplexityAnalyzer()
-        performance_analyzer = PerformanceAnalyzer()
-        ai_reviewer = AIReviewer()
-        aggregator = FindingAggregator()
-
-        all_file_analyses = []
-        all_issues = []
-
+        file_contents = []
         for file_info in python_files:
             filename = file_info['filename']
             content = client.get_file_content(filename, pr_details['head']['sha'])
-            if not content:
-                continue
+            if content:
+                file_contents.append({"filename": filename, "content": content})
 
-            sec_issues = security_analyzer.analyze(content, filename)
-            smell_issues = smell_analyzer.analyze(content, filename)
-            comp_issues = complexity_analyzer.analyze(content, filename)
-            perf_issues = performance_analyzer.analyze(content, filename)
-
-            raw_file_issues = sec_issues.issues + smell_issues + comp_issues + perf_issues
-            file_issues = aggregator.merge_findings(raw_file_issues)
-            
-            # Predict severity using ML
-            for issue in file_issues:
-                try:
-                    ai_reviewer.enhance_issue_with_nlp(issue, content[:2000])
-                    if "codebert" not in issue.source:
-                        issue.source.append("codebert")
-                except Exception:
-                    issue.explanation = issue.message
-                    issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
-
-                try:
-                    ml_issue = {
-                        "type": issue.type.value,
-                        "severity": issue.severity.value,
-                        "line_number": issue.line_number,
-                        "message": issue.message,
-                        "rule_id": issue.rule_id or "",
-                        "suggestion": issue.suggestion,
-                        "code_snippet": issue.code_snippet,
-                        "explanation": issue.explanation,
-                    }
-                    ml_result = ml_classifier.predict([ml_issue])[0]
-                    if ml_classifier.is_trained:
-                        issue.ml_severity = ml_result["ml_severity"]
-                        issue.ml_confidence = ml_result["ml_confidence"]
-                        issue.ml_model_version = ml_result.get("ml_model_version")
-                        if "ml" not in issue.source:
-                            issue.source.append("ml")
-                except Exception:
-                    pass
-
-            all_issues.extend(file_issues)
-
-            fa = FileAnalysis(
-                file_path=filename,
-                language="python",
-                lines_of_code=len(content.split('\n')),
-                issues=file_issues
-            )
-            all_file_analyses.append(fa)
-            
-        for file_info in non_python_files:
-            fa = FileAnalysis(
-                file_path=file_info['filename'],
-                language="unknown",
-                lines_of_code=0,
-                issues=[]
-            )
-            all_file_analyses.append(fa)
-
-        by_type = {}
-        by_severity = {}
-        for issue in all_issues:
-            by_type[issue.type.value] = by_type.get(issue.type.value, 0) + 1
-            by_severity[issue.severity.value] = by_severity.get(issue.severity.value, 0) + 1
-
-        overall_risk = "none"
-        if by_severity.get("critical", 0) > 0:
-            overall_risk = "critical"
-        elif by_severity.get("high", 0) > 0:
-            overall_risk = "high"
-        elif by_severity.get("medium", 0) > 0:
-            overall_risk = "medium"
-        elif by_severity.get("low", 0) > 0:
-            overall_risk = "low"
-
-        summary = AnalysisSummary(
-            total_issues=len(all_issues),
-            by_type=by_type,
-            by_severity=by_severity,
-            overall_risk=overall_risk,
-            file_path=repo_full_name
-        )
-
-        # Build AI context from actual diff (patch) where available, fallback to file content
         code_sample = f"PR: {repo_full_name} #{pr_number}\n{pr_details.get('title','')}\n{pr_details.get('body','')[:500]}\n\nDiff:\n"
         for file_info in python_files[:3]:
             patch = files_by_name.get(file_info['filename'], {}).get('patch')
             content_source = patch if patch else ""
             if not content_source:
-                # fallback fetch full content if no patch
                 try:
                     content_source = client.get_file_content(file_info['filename'], pr_details['head']['sha']) or ""
                 except Exception:
@@ -511,45 +410,43 @@ def analyze_pull_request(repo_full_name, pr_number):
                 truncated = content_source[:2500] + ("\n# ... truncated" if len(content_source) > 2500 else "")
                 code_sample += f"\n# {file_info['filename']}\n{truncated}\n"
 
-        # Structured AI review with fallback
-        try:
-            ai_res = ai_reviewer.review_code_structured(code_sample, repo_full_name, all_issues)
-            ai_review = ai_res.get("summary") or ai_res.get("raw") or "AI review unavailable; static analysis completed."
-            ai_available = ai_res.get("ai_available", False)
-            ai_error = ai_res.get("error")
-            ai_model = ai_res.get("model")
-            ai_structured = {"issues": ai_res.get("issues", []), "recommendations": ai_res.get("recommendations", []), "raw": ai_res.get("raw")}
-        except Exception as e:
-            current_app.logger.error(f"AI structured review failed in PR analysis: {e}")
-            ai_review = "AI review unavailable; static analysis completed."
-            ai_available = False
-            ai_error = str(e)
-            ai_model = getattr(ai_reviewer, "model", None)
-            ai_structured = None
+        if file_contents:
+            response = analysis_service.analyze_files(file_contents, context=code_sample)
+        else:
+            # Handle case where no python files were changed but we still need to return a valid response
+            response = ReviewResponse(
+                request_id=str(uuid.uuid4()),
+                file_analyses=[],
+                summary=AnalysisSummary(total_issues=0, by_type={}, by_severity={}, overall_risk="none", file_path=repo_full_name),
+                ai_review="No Python files to review.",
+                ai_available=False,
+                ai_error=None,
+                ai_model=None,
+                ai_structured=None,
+                processing_time_ms=0
+            )
 
-        response = ReviewResponse(
-            request_id=str(uuid.uuid4()),
-            file_analyses=all_file_analyses,
-            summary=summary,
-            ai_review=ai_review,
-            ai_available=ai_available,
-            ai_error=ai_error,
-            ai_model=ai_model,
-            ai_structured=ai_structured,
-            processing_time_ms=0
-        )
+        # Append non-python files as dummy analyses
+        for file_info in non_python_files:
+            fa = FileAnalysis(
+                file_path=file_info['filename'],
+                language="unknown",
+                lines_of_code=0,
+                issues=[]
+            )
+            response.file_analyses.append(fa)
 
         from database.mongodb import scan_service, ScanRecord, FileAnalysis as MongoFileAnalysis, AnalysisSummary as MongoAnalysisSummary
         scan = ScanRecord(
             user_id=user.id,
             request_id=response.request_id,
-            file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in all_file_analyses],
-            summary=MongoAnalysisSummary.model_validate(summary.model_dump()),
-            ai_review=ai_review,
-            ai_available=ai_available,
-            ai_error=ai_error,
-            ai_model=ai_model,
-            ai_structured=ai_structured,
+            file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in response.file_analyses],
+            summary=MongoAnalysisSummary.model_validate(response.summary.model_dump()),
+            ai_review=response.ai_review,
+            ai_available=response.ai_available,
+            ai_error=response.ai_error,
+            ai_model=response.ai_model,
+            ai_structured=response.ai_structured,
             github_pr_url=f"https://github.com/{repo_full_name}/pull/{pr_number}",
             github_pr_number=pr_number,
             github_repo=repo_full_name,
@@ -568,15 +465,15 @@ def analyze_pull_request(repo_full_name, pr_number):
         return jsonify({
             "message": "Analysis completed",
             "request_id": response.request_id,
-            "files_reviewed": len(all_file_analyses),
-            "total_issues": len(all_issues),
-            "overall_risk": overall_risk,
-            "summary": summary.model_dump(),
-            "ai_review": ai_review,
-            "ai_available": ai_available,
-            "ai_error": ai_error,
-            "ai_model": ai_model,
-            "ai_structured": ai_structured,
+            "files_reviewed": len(response.file_analyses),
+            "total_issues": response.summary.total_issues,
+            "overall_risk": response.summary.overall_risk,
+            "summary": response.summary.model_dump(),
+            "ai_review": response.ai_review,
+            "ai_available": response.ai_available,
+            "ai_error": response.ai_error,
+            "ai_model": response.ai_model,
+            "ai_structured": response.ai_structured,
         })
 
     except Exception as e:
@@ -585,6 +482,7 @@ def analyze_pull_request(repo_full_name, pr_number):
 
 
 @github_bp.route('/api/github/webhook', methods=['POST'])
+@rate_limit(max_requests=60, window=60)
 def github_webhook():
     """Canonical GitHub webhook endpoint. Validates HMAC SHA-256 and triggers async PR review."""
     from database.mongodb import user_service
@@ -659,16 +557,11 @@ def github_webhook():
         with app.app_context():
             try:
                 from services.github_client import GitHubClient
-                from analyzers.security_analyzer import SecurityAnalyzer
-                from analyzers.smell_analyzer import SmellAnalyzer
-                from analyzers.complexity_analyzer import ComplexityAnalyzer
-                from analyzers.performance_analyzer import PerformanceAnalyzer
-                from reviewer.ai_reviewer import AIReviewer
-                from reviewer.aggregator import FindingAggregator
                 from reviewer.github_commenter import GitHubCommenter
-                from models.review import ReviewResponse, FileAnalysis, AnalysisSummary
+                from models.review import ReviewResponse, FileAnalysis, AnalysisSummary, Severity
                 from database.mongodb import scan_service, ScanRecord, FileAnalysis as MongoFileAnalysis, AnalysisSummary as MongoAnalysisSummary
                 import uuid
+                from services.analysis_service import analysis_service
 
                 owner, name = repo_full_name.split("/", 1)
                 client = GitHubClient(token, owner, name)
@@ -677,6 +570,7 @@ def github_webhook():
                 files = client.get_pull_request_files(pr_number)
                 files_by_name_bg = {f['filename']: f for f in files}
                 python_files = [f for f in files if f['filename'].endswith('.py')]
+                non_python_files = [f for f in files if not f['filename'].endswith('.py')]
 
                 if not python_files:
                     return
@@ -685,94 +579,12 @@ def github_webhook():
                     app.logger.warning(f"PR #{pr_number} has {len(python_files)} Python files, truncating to 20")
                     python_files = python_files[:20]
 
-                security_analyzer = SecurityAnalyzer()
-                smell_analyzer = SmellAnalyzer()
-                complexity_analyzer = ComplexityAnalyzer()
-                performance_analyzer = PerformanceAnalyzer()
-                ai_reviewer = AIReviewer()
-                aggregator = FindingAggregator()
-
-                all_file_analyses = []
-                all_issues = []
-
+                file_contents = []
                 for file_info in python_files:
                     filename = file_info['filename']
                     content = client.get_file_content(filename, pr_details['head']['sha'])
-                    if not content:
-                        continue
-
-                    sec_issues = security_analyzer.analyze(content, filename)
-                    smell_issues = smell_analyzer.analyze(content, filename)
-                    comp_issues = complexity_analyzer.analyze(content, filename)
-                    perf_issues = performance_analyzer.analyze(content, filename)
-
-                    raw_file_issues = sec_issues.issues + smell_issues + comp_issues + perf_issues
-                    file_issues = aggregator.merge_findings(raw_file_issues)
-
-                    # Predict severity using ML
-                    for issue in file_issues:
-                        try:
-                            ai_reviewer.enhance_issue_with_nlp(issue, content[:2000])
-                            if "codebert" not in issue.source:
-                                issue.source.append("codebert")
-                        except Exception:
-                            issue.explanation = issue.message
-                            issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
-
-                        try:
-                            ml_issue = {
-                                "type": issue.type.value,
-                                "severity": issue.severity.value,
-                                "line_number": issue.line_number,
-                                "message": issue.message,
-                                "rule_id": issue.rule_id or "",
-                                "suggestion": issue.suggestion,
-                                "code_snippet": issue.code_snippet,
-                                "explanation": issue.explanation,
-                            }
-                            ml_result = ml_classifier.predict([ml_issue])[0]
-                            if ml_classifier.is_trained:
-                                issue.ml_severity = ml_result["ml_severity"]
-                                issue.ml_confidence = ml_result["ml_confidence"]
-                                issue.ml_model_version = ml_result.get("ml_model_version")
-                                if "ml" not in issue.source:
-                                    issue.source.append("ml")
-                        except Exception:
-                            pass
-
-                    all_issues.extend(file_issues)
-
-                    fa = FileAnalysis(
-                        file_path=filename,
-                        language="python",
-                        lines_of_code=len(content.split('\n')),
-                        issues=file_issues
-                    )
-                    all_file_analyses.append(fa)
-
-                by_type = {}
-                by_severity = {}
-                for issue in all_issues:
-                    by_type[issue.type.value] = by_type.get(issue.type.value, 0) + 1
-                    by_severity[issue.severity.value] = by_severity.get(issue.severity.value, 0) + 1
-
-                overall_risk = "none"
-                if by_severity.get("critical", 0) > 0:
-                    overall_risk = "critical"
-                elif by_severity.get("high", 0) > 0:
-                    overall_risk = "high"
-                elif by_severity.get("medium", 0) > 0:
-                    overall_risk = "medium"
-                elif by_severity.get("low", 0) > 0:
-                    overall_risk = "low"
-
-                summary = AnalysisSummary(
-                    total_issues=len(all_issues),
-                    by_type=by_type,
-                    by_severity=by_severity,
-                    overall_risk=overall_risk,
-                    file_path=repo_full_name
-                )
+                    if content:
+                        file_contents.append({"filename": filename, "content": content})
 
                 code_sample = f"PR: {repo_full_name} #{pr_number}\n{pr_details.get('title','')}\n{pr_details.get('body','')[:500]}\n\nDiff:\n"
                 for file_info in python_files[:3]:
@@ -787,43 +599,40 @@ def github_webhook():
                         truncated = content_source[:2500] + ("\n# ... truncated" if len(content_source) > 2500 else "")
                         code_sample += f"\n# {file_info['filename']}\n{truncated}\n"
 
-                try:
-                    ai_res_bg = ai_reviewer.review_code_structured(code_sample, repo_full_name, all_issues)
-                    ai_review = ai_res_bg.get("summary") or ai_res_bg.get("raw") or "AI review unavailable; static analysis completed."
-                    ai_available_bg = ai_res_bg.get("ai_available", False)
-                    ai_error_bg = ai_res_bg.get("error")
-                    ai_model_bg = ai_res_bg.get("model")
-                    ai_structured_bg = {"issues": ai_res_bg.get("issues", []), "recommendations": ai_res_bg.get("recommendations", []), "raw": ai_res_bg.get("raw")}
-                except Exception as e:
-                    app.logger.error(f"AI review failed in webhook: {e}")
-                    ai_review = "AI review unavailable; static analysis completed."
-                    ai_available_bg = False
-                    ai_error_bg = str(e)
-                    ai_model_bg = getattr(ai_reviewer, "model", None)
-                    ai_structured_bg = None
+                if file_contents:
+                    response = analysis_service.analyze_files(file_contents, context=code_sample)
+                else:
+                    response = ReviewResponse(
+                        request_id=str(uuid.uuid4()),
+                        file_analyses=[],
+                        summary=AnalysisSummary(total_issues=0, by_type={}, by_severity={}, overall_risk="none", file_path=repo_full_name),
+                        ai_review="No Python files to review.",
+                        ai_available=False,
+                        ai_error=None,
+                        ai_model=None,
+                        ai_structured=None,
+                        processing_time_ms=0
+                    )
 
-                response = ReviewResponse(
-                    request_id=str(uuid.uuid4()),
-                    file_analyses=all_file_analyses,
-                    summary=summary,
-                    ai_review=ai_review,
-                    ai_available=ai_available_bg,
-                    ai_error=ai_error_bg,
-                    ai_model=ai_model_bg,
-                    ai_structured=ai_structured_bg,
-                    processing_time_ms=0
-                )
+                for file_info in non_python_files:
+                    fa = FileAnalysis(
+                        file_path=file_info['filename'],
+                        language="unknown",
+                        lines_of_code=0,
+                        issues=[]
+                    )
+                    response.file_analyses.append(fa)
 
                 scan = ScanRecord(
                     user_id=uid,
                     request_id=response.request_id,
-                    file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in all_file_analyses],
-                    summary=MongoAnalysisSummary.model_validate(summary.model_dump()),
-                    ai_review=ai_review,
-                    ai_available=ai_available_bg,
-                    ai_error=ai_error_bg,
-                    ai_model=ai_model_bg,
-                    ai_structured=ai_structured_bg,
+                    file_analyses=[MongoFileAnalysis.model_validate(fa.model_dump()) for fa in response.file_analyses],
+                    summary=MongoAnalysisSummary.model_validate(response.summary.model_dump()),
+                    ai_review=response.ai_review,
+                    ai_available=response.ai_available,
+                    ai_error=response.ai_error,
+                    ai_model=response.ai_model,
+                    ai_structured=response.ai_structured,
                     github_pr_url=f"https://github.com/{repo_full_name}/pull/{pr_number}",
                     github_pr_number=pr_number,
                     github_repo=repo_full_name,
@@ -831,7 +640,23 @@ def github_webhook():
                 )
                 scan_service.create_scan(scan)
 
+                # Post comment
                 commenter = GitHubCommenter(client)
+                summary_comment = commenter.format_pr_summary_comment([response])
+                client.create_pr_comment(pr_number, summary_comment)
+
+                for file_analysis in response.file_analyses:
+                    for issue in file_analysis.issues:
+                        if issue.severity in (Severity.CRITICAL, Severity.HIGH):
+                            comment_body = commenter.format_review_comment(response)
+                            client.create_review_comment(
+                                pr_number=pr_number,
+                                commit_sha=pr_details['head']['sha'],
+                                path=file_analysis.file_path,
+                                body=comment_body,
+                                line=issue.line_number
+                            )
+                            break
                 comment_body = commenter.format_review_comment(response)
                 client.create_pr_comment(pr_number, comment_body)
                 app.logger.info(f"Webhook processing completed and comment posted for PR #{pr_number}")
