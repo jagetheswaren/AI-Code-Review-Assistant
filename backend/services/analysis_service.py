@@ -50,16 +50,16 @@ class AnalysisService:
             raw_file_issues = sec_issues.issues + smell_issues + comp_issues + perf_issues
             file_issues = self.aggregator.merge_findings(raw_file_issues)
 
-            # ML Enhancement
-            for issue in file_issues:
-                try:
-                    self.ai_reviewer.enhance_issue_with_nlp(issue, content[:2000])
-                    if "codebert" not in issue.source:
-                        issue.source.append("codebert")
-                except Exception:
-                    issue.explanation = issue.message
-                    issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
+            # Add LLM source tag if AI reviewer is active
+            try:
+                if hasattr(self, 'ai_reviewer') and self.ai_reviewer:
+                    for issue in file_issues:
+                        if "ai" not in issue.source:
+                            issue.source.append("ai")
+            except Exception:
+                pass
 
+            for issue in file_issues:
                 try:
                     ml_issue = {
                         "type": issue.type.value,

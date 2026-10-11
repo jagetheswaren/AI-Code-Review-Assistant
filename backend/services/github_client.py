@@ -32,7 +32,10 @@ class GitHubClient:
         if resp.status_code == 403 and resp.headers.get("X-RateLimit-Remaining") == "0":
             reset = resp.headers.get("X-RateLimit-Reset", "")
             raise requests.HTTPError(f"GitHub rate limit exceeded. Reset at {reset}", response=resp)
-        if resp.status_code in (401, 403, 404, 409, 422, 429) or resp.status_code >= 500:
+        if resp.status_code == 429:
+            retry_after = resp.headers.get("Retry-After", "60")
+            raise requests.HTTPError(f"GitHub secondary rate limit exceeded. Retry after {retry_after}s", response=resp)
+        if resp.status_code in (401, 403, 404, 409, 422) or resp.status_code >= 500:
             # Let callers handle with more context; preserve original
             pass
 
@@ -66,12 +69,22 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
-    def get_pull_request_files(self, pr_number: int) -> List[Dict[str, Any]]:
+    def get_pull_request_files(self, pr_number: int, per_page: int = 100) -> List[Dict[str, Any]]:
         url = self._url(f"/pulls/{pr_number}/files")
-        response = requests.get(url, headers=self.headers, timeout=DEFAULT_TIMEOUT)
-        self._check_rate_limit(response)
-        response.raise_for_status()
-        return response.json()
+        files = []
+        page = 1
+        while True:
+            response = requests.get(url, headers=self.headers, params={"per_page": per_page, "page": page}, timeout=DEFAULT_TIMEOUT)
+            self._check_rate_limit(response)
+            response.raise_for_status()
+            data = response.json()
+            if not data:
+                break
+            files.extend(data)
+            if len(data) < per_page:
+                break
+            page += 1
+        return files
 
     def get_file_content(self, file_path: str, ref: str = None) -> Optional[str]:
         url = self._url(f"/contents/{file_path}")

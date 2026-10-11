@@ -53,6 +53,18 @@ class TestSecurityAnalyzer:
         assert result is not None
         assert isinstance(result.issues, list)
 
+    def test_detects_insecure_tempfile_and_sql_injection(self, analyzer):
+        """Test detection of mktemp and dynamic SQL interpolation"""
+        code = '''
+import tempfile
+path = tempfile.mktemp()
+cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")
+'''
+        result = analyzer.analyze(code)
+        rule_ids = [issue.rule_id for issue in result.issues if issue.rule_id]
+        assert any("MKTEMP" in r for r in rule_ids)
+        assert any("SQL_INJECTION" in r for r in rule_ids)
+
 
 class TestSmellAnalyzer:
     """Test SmellAnalyzer"""

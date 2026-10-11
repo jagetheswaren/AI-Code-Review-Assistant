@@ -1,102 +1,77 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ExternalLink,
   Star,
   GitFork,
   Search,
   RefreshCw,
-  Plug,
-  Unplug,
+  GitBranch,
   Key,
+  Lock,
+  Globe,
+  ChevronRight,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { GithubIcon } from '../lib/utils';
-import { getGitHubStatus, getGitHubRepos, connectGitHubPAT, disconnectGitHub, getGitHubOAuthUrl } from '../api/client';
-import { useToast } from '../contexts/ToastContext';
 import {
-  Button,
-  Card,
-  Badge,
-  Input,
-  EmptyState,
-  Skeleton,
-} from '../components/ui';
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-};
-
-const languageColors = {
-  JavaScript: '#f1e05a',
-  TypeScript: '#3178c6',
-  Python: '#3572A5',
-  Java: '#b07219',
-  Go: '#00ADD8',
-  Rust: '#dea584',
-  Ruby: '#701516',
-  'C++': '#f34b7d',
-  C: '#555555',
-  Swift: '#F05138',
-  Kotlin: '#A97BFF',
-  PHP: '#4F5D95',
-  Shell: '#89e051',
-  HTML: '#e34c26',
-  CSS: '#563d7c',
-  'Jupyter Notebook': '#DA5B0B',
-};
-
-function SkeletonCards() {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Card key={i} className="bg-[#111827] border-white/[0.06]">
-          <div className="px-5 py-4 space-y-3">
-            <Skeleton className="h-5 w-3/4 bg-white/[0.06]" />
-            <Skeleton className="h-4 w-full bg-white/[0.04]" />
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-5 w-16 bg-white/[0.04]" />
-              <Skeleton className="h-4 w-12 bg-white/[0.04]" />
-              <Skeleton className="h-4 w-12 bg-white/[0.04]" />
-            </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
+  getGitHubStatus,
+  getGitHubRepos,
+  connectGitHubPAT,
+  disconnectGitHub,
+  getGitHubAuthUrl,
+} from '../api/client';
+import { useToast } from '../contexts/ToastContext';
+import { Button, Badge, Input, Skeleton } from '../components/ui';
+import {
+  SpotlightCard,
+  StatusMark,
+  HoldButton,
+  CountUp,
+  ElectricBorder,
+} from '../components/reactbits/Bits';
+import { cn } from '../lib/utils';
+import { ErrorState } from '../components/workbench';
 
 export default function GitHubIntegration() {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { success, error: toastError } = useToast();
+
   const [status, setStatus] = useState(null);
+  const [statusError, setStatusError] = useState('');
+  const [oauthError, setOauthError] = useState('');
+  const [reposError, setReposError] = useState('');
   const [repos, setRepos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reposLoading, setReposLoading] = useState(false);
-  const [reposError, setReposError] = useState(null);
   const [search, setSearch] = useState('');
-  const [showPATInput, setShowPATInput] = useState(false);
+  const [selectedLang, setSelectedLang] = useState('all');
+  const [showPATModal, setShowPATModal] = useState(false);
   const [patToken, setPatToken] = useState('');
   const [patLoading, setPatLoading] = useState(false);
-  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     loadStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadStatus() {
     setLoading(true);
+    setStatusError('');
     try {
       const res = await getGitHubStatus();
       const data = res.data || res;
       setStatus(data);
       if (data.connected) {
-        loadRepos();
+        await loadRepos();
+      } else {
+        setRepos([]);
       }
-    } catch {
-      setStatus({ connected: false });
+    } catch (err) {
+      setStatus(null);
+      setStatusError(err.response?.data?.error || err.message || 'Could not check GitHub connection status.');
     } finally {
       setLoading(false);
     }
@@ -104,299 +79,384 @@ export default function GitHubIntegration() {
 
   async function loadRepos() {
     setReposLoading(true);
-    setReposError(null);
+    setReposError('');
     try {
       const res = await getGitHubRepos();
-      const data = res.data || res;
-      setRepos(data.repos || data || []);
+      setRepos(res.data?.repos || res.data?.repositories || []);
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Failed to fetch repositories';
-      setReposError(msg);
       setRepos([]);
+      setReposError(err.response?.data?.error || err.message || 'Failed to fetch repositories.');
     } finally {
       setReposLoading(false);
     }
   }
 
-  async function handlePATConnect() {
+  async function handleConnectPAT(e) {
+    e.preventDefault();
     if (!patToken.trim()) return;
     setPatLoading(true);
     try {
       await connectGitHubPAT(patToken.trim());
-      setShowPATInput(false);
+      success('GitHub Personal Access Token connected successfully!');
+      setShowPATModal(false);
       setPatToken('');
-      toast({ title: 'GitHub connected', variant: 'success' });
       loadStatus();
     } catch (err) {
-      toast({ title: 'Failed to connect', description: err.response?.data?.error || err.message, variant: 'error' });
+      toastError(err.response?.data?.error || 'Failed to validate PAT');
     } finally {
       setPatLoading(false);
     }
   }
 
   async function handleDisconnect() {
-    setDisconnecting(true);
     try {
       await disconnectGitHub();
-      toast({ title: 'GitHub disconnected', variant: 'success' });
+      success('GitHub account disconnected');
       setStatus({ connected: false });
       setRepos([]);
     } catch (err) {
-      toast({ title: 'Disconnect failed', description: err.response?.data?.error || err.message, variant: 'error' });
-    } finally {
-      setDisconnecting(false);
+      toastError(err.response?.data?.error || 'Failed to disconnect');
     }
   }
 
-  const filteredRepos = repos.filter(
-    (repo) =>
-      repo.name?.toLowerCase().includes(search.toLowerCase()) ||
-      repo.description?.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleOAuthConnect = async () => {
+    setOauthError('');
+    try {
+      const data = await getGitHubAuthUrl();
+      if (!data?.auth_url) {
+        throw new Error('GitHub authorization URL was not returned by the server');
+      }
+      window.location.assign(data.auth_url);
+    } catch (err) {
+      const missing = err.response?.data?.missing;
+      setOauthError(missing?.length
+        ? `GitHub OAuth is not configured. Add ${missing.join(' and ')} in backend .env.`
+        : err.response?.data?.error || err.message || 'Failed to start GitHub authorization.');
+    }
+  };
+
+  const filteredRepos = repos.filter((r) => {
+    const matchesSearch =
+      r.name.toLowerCase().includes(search.toLowerCase()) ||
+      (r.description || '').toLowerCase().includes(search.toLowerCase());
+    const matchesLang = selectedLang === 'all' || (r.language || '').toLowerCase() === selectedLang.toLowerCase();
+    return matchesSearch && matchesLang;
+  });
+
+  const uniqueLanguages = Array.from(new Set(repos.map((r) => r.language).filter(Boolean)));
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-32 rounded-xl" />
+          <Skeleton className="h-32 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0F172A] p-6 lg:p-8">
-      <motion.div variants={fadeUp} initial="hidden" animate="visible">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <GithubIcon className="h-8 w-8 text-slate-300" />
+    <div className="space-y-6 select-none">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.06]">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-content">
               GitHub Integration
             </h1>
-            <p className="mt-2 text-slate-400">Connect your GitHub account to analyze repositories</p>
+            <StatusMark
+              status={status?.connected ? 'online' : 'offline'}
+              label={status?.connected ? 'Connected' : 'Disconnected'}
+            />
           </div>
-          {status?.connected && (
-            <Button
-              onClick={loadRepos}
-              variant="outline"
-              className="border-white/[0.08] text-slate-300 hover:bg-white/[0.05]"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-          )}
+          <p className="text-xs font-mono text-content-muted mt-1">
+            Automate code review workflows, pull request analysis, and webhook comments
+          </p>
         </div>
-      </motion.div>
 
-      <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>
-        <Card className="bg-[#111827] border-white/[0.06] mb-8">
-          <div className="px-6 py-5">
-            {loading ? (
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-12 w-12 rounded-full bg-white/[0.06]" />
-                <div className="space-y-2">
-                  <Skeleton className="h-5 w-48 bg-white/[0.06]" />
-                  <Skeleton className="h-4 w-32 bg-white/[0.04]" />
-                </div>
+        {status?.connected && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadRepos}
+              isLoading={reposLoading}
+              className="font-mono text-xs"
+            >
+              <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh Repos
+            </Button>
+            <HoldButton
+              onComplete={handleDisconnect}
+              className="bg-danger/10 hover:bg-danger/20 text-danger border border-danger/30 text-xs font-mono py-1.5 px-3 rounded-lg"
+            >
+              Hold to Disconnect
+            </HoldButton>
+          </div>
+        )}
+      </div>
+
+      {statusError && <ErrorState message={statusError} onRetry={loadStatus} />}
+      {oauthError && <ErrorState message={oauthError} onRetry={handleOAuthConnect} />}
+
+      {/* DISCONNECTED STATE */}
+      {!status?.connected ? (
+        <div className="max-w-3xl mx-auto py-10 space-y-8">
+          <ElectricBorder active={true} color="#63E6FF">
+            <div className="p-8 sm:p-12 rounded-xl bg-[#090D13] text-center space-y-6">
+              <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto shadow-cyanGlow/20">
+                <GithubIcon className="w-8 h-8 text-primary" />
               </div>
-            ) : status?.connected ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  {status.avatar_url && (
-                    <img
-                      src={status.avatar_url}
-                      alt={status.github_username}
-                      className="w-12 h-12 rounded-full border-2 border-white/[0.1]"
-                    />
-                  )}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-white font-semibold">{status.github_username}</h3>
-                      <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/20 text-xs">
-                        Connected
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-slate-400">GitHub account linked</p>
-                  </div>
-                </div>
+
+              <div>
+                <h2 className="font-display text-2xl font-bold text-content">
+                  Connect your GitHub Organization or Account
+                </h2>
+                <p className="text-xs sm:text-sm font-mono text-content-muted mt-2 max-w-lg mx-auto leading-relaxed">
+                  Link GitHub to inspect repositories, analyze pull request diffs, and automatically post inline security review comments.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
                 <Button
-                  variant="outline"
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  className="border-red-500/30 text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                  variant="primary"
+                  size="lg"
+                  onClick={handleOAuthConnect}
+                  className="font-mono text-xs px-6 h-11"
                 >
-                  <Unplug className="h-4 w-4 mr-2" />
-                  {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+                  <GithubIcon className="w-4 h-4 mr-2" />
+                  Connect with GitHub OAuth
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => setShowPATModal(true)}
+                  className="font-mono text-xs px-6 h-11"
+                >
+                  <Key className="w-4 h-4 mr-2" />
+                  Connect with PAT Token
                 </Button>
               </div>
-            ) : (
-              <div className="text-center py-4">
-                <div className="w-16 h-16 rounded-2xl bg-white/[0.05] flex items-center justify-center mx-auto mb-4">
-                  <GithubIcon className="h-8 w-8 text-slate-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Connect Your GitHub Account</h3>
-                <p className="text-sm text-slate-400 mb-6 max-w-md mx-auto">
-                  Link your GitHub account to browse repositories, review pull requests, and get AI-powered
-                  code analysis on your projects.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <Button
-                    onClick={async () => {
-                      try {
-                        const data = await getGitHubOAuthUrl();
-                        window.location.href = data.auth_url;
-                      } catch (err) {
-                        toast({ 
-                          title: 'OAuth Initialization failed', 
-                          description: err.response?.data?.error || err.message, 
-                          variant: 'error' 
-                        });
-                      }
-                    }}
-                    className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-8 py-3 shadow-lg shadow-indigo-500/25"
-                  >
-                    <Plug className="h-4 w-4 mr-2" />
-                    Connect with GitHub OAuth
-                  </Button>
-                  <Button
-                    onClick={() => setShowPATInput(!showPATInput)}
-                    variant="outline"
-                    className="border-white/[0.1] text-slate-300 hover:bg-white/[0.05] px-6 py-3"
-                  >
-                    <Key className="h-4 w-4 mr-2" />
-                    Use Personal Access Token
-                  </Button>
-                </div>
-                {showPATInput && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="mt-6 max-w-md mx-auto"
-                  >
-                    <Card className="bg-[#1E293B] border-white/[0.08]">
-                      <div className="p-4 space-y-3">
-                        <label className="block text-xs font-medium text-slate-400">
-                          GitHub Personal Access Token
-                        </label>
-                        <Input
-                          type="password"
-                          placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                          value={patToken}
-                          onChange={(e) => setPatToken(e.target.value)}
-                          className="bg-white/[0.04] border-white/[0.08] text-white placeholder:text-slate-500"
-                        />
-                        <p className="text-xs text-slate-500">
-                          Generate at{' '}
-                          <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300">
-                            github.com/settings/tokens
-                          </a>
-                          {' '}with <code className="text-slate-400">repo</code> scope.
-                        </p>
-                        <Button
-                          onClick={handlePATConnect}
-                          disabled={!patToken.trim()}
-                          className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium disabled:opacity-50"
-                        >
-                          {patLoading ? 'Connecting...' : 'Connect with Token'}
-                        </Button>
-                      </div>
-                    </Card>
-                  </motion.div>
-                )}
-              </div>
-            )}
-          </div>
-        </Card>
-      </motion.div>
+            </div>
+          </ElectricBorder>
 
-      {status?.connected && (
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.2 }}>
-          <div className="mb-6">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <Input
-                placeholder="Search repositories..."
+          {/* Capabilities Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+            <SpotlightCard className="p-5 space-y-2">
+              <ShieldCheck className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-content text-sm">Automated PR Gates</h3>
+              <p className="text-content-muted text-[11px] leading-relaxed">
+                Detect vulnerabilities directly on pull request commits before merge.
+              </p>
+            </SpotlightCard>
+
+            <SpotlightCard className="p-5 space-y-2">
+              <GitBranch className="w-5 h-5 text-secondary" />
+              <h3 className="font-semibold text-content text-sm">Branch & Diff Analysis</h3>
+              <p className="text-content-muted text-[11px] leading-relaxed">
+                Inspect 3-pane split views of modified files and line-level AST diffs.
+              </p>
+            </SpotlightCard>
+
+            <SpotlightCard className="p-5 space-y-2">
+              <Lock className="w-5 h-5 text-success" />
+              <h3 className="font-semibold text-content text-sm">Zero Token Exposure</h3>
+              <p className="text-content-muted text-[11px] leading-relaxed">
+                Tokens are stored encrypted server-side in MongoDB and never leaked to browser.
+              </p>
+            </SpotlightCard>
+          </div>
+        </div>
+      ) : (
+        /* CONNECTED STATE */
+        <div className="space-y-6">
+          {/* Top Status & Summary Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <SpotlightCard className="p-4 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-mono text-content-muted uppercase">Connected User</span>
+                <p className="font-display font-semibold text-base text-content mt-1">
+                  {status.github_username || status.username || 'GitHub user'}
+                </p>
+              </div>
+              <Badge variant="success">AUTHORIZED</Badge>
+            </SpotlightCard>
+
+            <SpotlightCard className="p-4 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-mono text-content-muted uppercase">Available Repositories</span>
+                <p className="font-display font-semibold text-base text-content mt-1">
+                  <CountUp end={repos.length} /> Repos
+                </p>
+              </div>
+              <Badge variant="cyan">SYNCED</Badge>
+            </SpotlightCard>
+
+            <SpotlightCard className="p-4 flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-mono text-content-muted uppercase">Auth Method</span>
+                <p className="font-display font-semibold text-base text-content mt-1 uppercase">
+                  {status.method || 'Not reported'}
+                </p>
+              </div>
+              <Badge variant="outline">SECURE</Badge>
+            </SpotlightCard>
+          </div>
+
+          {/* Search & Filter Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-[#0D131C] border border-white/[0.08]">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-content-subtle absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 bg-white/[0.04] border-white/[0.08] text-white placeholder:text-slate-500"
+                placeholder="Search repositories by name or description..."
+                className="w-full bg-[#070A0F] border border-white/[0.08] rounded-lg pl-9 pr-3 py-2 text-xs font-mono text-content placeholder:text-content-subtle focus:outline-none focus:border-primary/50"
               />
+            </div>
+
+            {/* Language Filters */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-mono">
+              <button
+                onClick={() => setSelectedLang('all')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  selectedLang === 'all'
+                    ? 'bg-primary/15 text-primary border border-primary/25 font-semibold'
+                    : 'text-content-muted hover:text-content'
+                }`}
+              >
+                All
+              </button>
+              {uniqueLanguages.map((lang) => (
+                <button
+                  key={lang}
+                  onClick={() => setSelectedLang(lang)}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${
+                    selectedLang === lang
+                      ? 'bg-primary/15 text-primary border border-primary/25 font-semibold'
+                      : 'text-content-muted hover:text-content'
+                  }`}
+                >
+                  {lang}
+                </button>
+              ))}
             </div>
           </div>
 
-          {reposError ? (
-            <Card className="bg-red-950/20 border-red-500/20 p-6 text-center">
-              <p className="text-sm text-red-400">{reposError}</p>
-              <Button onClick={loadRepos} variant="outline" size="sm" className="mt-3 border-red-500/30 text-red-400">Retry</Button>
-            </Card>
-          ) : reposLoading ? (
-            <SkeletonCards />
-          ) : filteredRepos.length > 0 ? (
+          {/* Repository Cards Grid */}
+          {reposLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredRepos.map((repo) => (
-                <motion.div
-                  key={repo.id || repo.full_name}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                >
-                  <Card
-                    className="bg-[#111827] border-white/[0.06] hover:border-white/[0.12] transition-colors cursor-pointer h-full"
-                    onClick={() => navigate(`/github/${repo.full_name}`)}
-                  >
-                    <div className="px-5 py-4 flex flex-col h-full">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="text-white font-semibold text-sm truncate">{repo.name}</h3>
-                        <ExternalLink className="h-4 w-4 text-slate-500 flex-shrink-0 mt-0.5" />
-                      </div>
-                      {repo.description && (
-                        <p className="text-xs text-slate-400 line-clamp-2 mb-3">{repo.description}</p>
-                      )}
-                      <div className="mt-auto flex items-center gap-3 flex-wrap">
-                        {repo.language && (
-                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-300">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full"
-                              style={{
-                                backgroundColor: languageColors[repo.language] || '#6b7280',
-                              }}
-                            />
-                            {repo.language}
-                          </span>
-                        )}
-                        {repo.stargazers_count != null && (
-                          <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                            <Star className="h-3.5 w-3.5" />
-                            {repo.stargazers_count.toLocaleString()}
-                          </span>
-                        )}
-                        {repo.forks_count != null && (
-                          <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                            <GitFork className="h-3.5 w-3.5" />
-                            {repo.forks_count.toLocaleString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-40 rounded-xl" />
               ))}
             </div>
+          ) : reposError ? (
+            <ErrorState message={reposError} onRetry={loadRepos} />
+          ) : filteredRepos.length === 0 ? (
+            <div className="py-16 text-center text-xs font-mono text-content-muted">
+              {repos.length === 0 ? 'No repositories were returned for this GitHub account.' : 'No matching repositories found.'}
+            </div>
           ) : (
-            <EmptyState
-              icon={GithubIcon}
-              title="No repositories found"
-              description={
-                search
-                  ? 'No repositories match your search. Try a different term.'
-                  : 'No repositories available. Make sure your GitHub account has repositories.'
-              }
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredRepos.map((repo) => (
+                <SpotlightCard
+                  key={repo.id}
+                  onClick={() => navigate(`/github/${repo.full_name}`)}
+                  className="p-5 flex flex-col justify-between cursor-pointer group hover:border-primary/40"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <GitBranch className="w-4 h-4 text-primary shrink-0" />
+                        <h3 className="font-mono text-sm font-semibold text-content truncate group-hover:text-primary transition-colors">
+                          {repo.name}
+                        </h3>
+                      </div>
+                      <Badge variant={repo.private ? 'outline' : 'cyan'}>
+                        {repo.private ? 'PRIVATE' : 'PUBLIC'}
+                      </Badge>
+                    </div>
+
+                    <p className="text-xs text-content-muted line-clamp-2 leading-relaxed min-h-[32px]">
+                      {repo.description || 'No description provided.'}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono text-content-subtle">
+                    <div className="flex items-center gap-3">
+                      <span>{repo.language || 'Language not reported'}</span>
+                      <span className="flex items-center gap-1">
+                        <Star className="w-3 h-3 text-amber-400" />
+                        {repo.stargazers_count || 0}
+                      </span>
+                    </div>
+                    <span className="text-primary group-hover:translate-x-1 transition-transform flex items-center gap-1">
+                      Inspect <ChevronRight className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                </SpotlightCard>
+              ))}
+            </div>
           )}
-        </motion.div>
+        </div>
       )}
 
-      {!loading && !status?.connected && (
-        <motion.div variants={fadeUp} initial="hidden" animate="visible" transition={{ delay: 0.3 }}>
-          <Card className="bg-amber-950/20 border-amber-500/20 p-6 text-center mb-4">
-            <p className="text-sm text-amber-300 font-medium">GitHub not configured</p>
-            <p className="text-xs text-amber-400/80 mt-1">Configure GITHUB_TOKEN or OAuth in backend environment. Connect above when ready.</p>
-          </Card>
-          <EmptyState
-            icon={GithubIcon}
-            title="Connect to get started"
-            description="Connect your GitHub account above to browse and analyze your repositories."
-          />
-        </motion.div>
-      )}
+      {/* PAT Modal */}
+      <AnimatePresence>
+        {showPATModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowPATModal(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="relative w-full max-w-md p-6 rounded-2xl bg-[#0D131C] border border-white/[0.1] shadow-2xl space-y-4"
+            >
+              <h3 className="font-display font-semibold text-base text-content">
+                Connect GitHub Personal Access Token
+              </h3>
+              <p className="text-xs font-mono text-content-muted leading-relaxed">
+                Provide a GitHub PAT with <code className="text-primary font-bold">repo</code> scope to allow IntelliReview to inspect pull requests and submit comments.
+              </p>
+
+              <form onSubmit={handleConnectPAT} className="space-y-4">
+                <Input
+                  type="password"
+                  icon={Key}
+                  placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                  value={patToken}
+                  onChange={(e) => setPatToken(e.target.value)}
+                  required
+                />
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowPATModal(false)}
+                    className="font-mono text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    isLoading={patLoading}
+                    className="font-mono text-xs"
+                  >
+                    Save & Validate Token
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

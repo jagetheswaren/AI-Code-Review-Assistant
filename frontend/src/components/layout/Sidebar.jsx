@@ -1,143 +1,246 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   Code2,
   GitBranch,
-  FileText,
+  ShieldAlert,
+  Sparkles,
+  Zap,
+  History,
+  FileBarChart,
   MessageSquare,
   Settings,
   User,
   LogOut,
+  ChevronLeft,
+  ChevronRight,
+  Terminal,
   X,
-  ScanSearch,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { type: 'divider', label: 'Analysis' },
-  { path: '/review', label: 'AI Code Review', icon: Code2 },
-  { path: '/github', label: 'Repositories', icon: GitBranch },
+export const navItems = [
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { path: '/review', label: 'AI Review', icon: Code2 },
+  { path: '/github', label: 'GitHub', icon: GitBranch },
+  { path: '/history', label: 'History', icon: History },
   { type: 'divider', label: 'Intelligence' },
-  { path: '/history', label: 'Scan History', icon: ScanSearch },
-  { path: '/reports', label: 'Reports', icon: FileText },
+  { path: '/security', label: 'Security', icon: ShieldAlert },
+  { path: '/quality', label: 'Quality', icon: Sparkles },
+  { path: '/performance', label: 'Performance', icon: Zap },
+  { path: '/reports', label: 'Reports', icon: FileBarChart },
   { path: '/chat', label: 'AI Assistant', icon: MessageSquare },
-  { type: 'divider', label: 'Account' },
+  { type: 'divider', label: 'Preferences' },
   { path: '/settings', label: 'Settings', icon: Settings },
   { path: '/profile', label: 'Profile', icon: User },
 ];
 
-const SidebarContent = ({ onClose, user, logout }) => (
-  <div className="flex flex-col h-full">
-    <div className="px-5 py-5 border-b border-white/[0.06]">
-      <div className="flex items-center justify-between">
-        <NavLink to="/" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2563EB] to-[#7C3AED] flex items-center justify-center shadow-lg shadow-[#2563EB]/20">
-            <ScanSearch className="w-5 h-5 text-white" />
+export const Sidebar = ({ isOpen, onClose, collapsed, onToggleCollapse }) => {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+
+  const isRail = collapsed;
+
+  const content = (
+    <div className="flex flex-col h-full bg-[#070A0F] border-r border-white/[0.08] select-none">
+      {/* Brand Header */}
+      <div className={cn(
+        "h-16 flex items-center border-b border-white/[0.08] shrink-0 transition-all px-4",
+        isRail ? "justify-center" : "justify-between"
+      )}>
+        <NavLink to="/" className="flex items-center gap-3 group">
+          <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary p-[1px] shadow-cyanGlow/40">
+            <div className="w-full h-full bg-[#070A0F] rounded-[7px] flex items-center justify-center">
+              <Terminal className="w-4 h-4 text-primary group-hover:rotate-12 transition-transform" />
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-[15px] text-white tracking-tight">IntelliReview</h1>
-            <p className="text-[11px] text-slate-500 font-medium">AI Code Review</p>
-          </div>
+          {!isRail && (
+            <div className="flex flex-col">
+              <span className="font-display font-bold text-sm tracking-tight text-content flex items-center gap-1.5">
+                IntelliReview
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20">
+                  AI
+                </span>
+              </span>
+              <span className="text-[10px] font-mono text-content-subtle tracking-wider uppercase">v2.0 Compiler</span>
+            </div>
+          )}
         </NavLink>
+
+        {/* Desktop Collapse Toggle */}
+        <button
+          onClick={onToggleCollapse}
+          className="hidden lg:flex p-1.5 rounded-md text-content-subtle hover:text-content hover:bg-white/[0.06] transition-colors"
+          title={isRail ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {isRail ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+        </button>
+
+        {/* Mobile Close Button */}
         <button
           onClick={onClose}
-          className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+          className="lg:hidden p-1.5 rounded-md text-content-subtle hover:text-content hover:bg-white/[0.06] transition-colors"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
-    </div>
 
-    <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-      {navItems.map((item, i) => {
-        if (item.type === 'divider') {
+      {/* Navigation List */}
+      <nav className="flex-1 px-2.5 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
+        {navItems.map((item, idx) => {
+          if (item.type === 'divider') {
+            if (isRail) {
+              return <div key={idx} className="my-2 border-t border-white/[0.06]" />;
+            }
+            return (
+              <div key={idx} className="px-3 pt-4 pb-1">
+                <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-content-subtle/80">
+                  {item.label}
+                </span>
+              </div>
+            );
+          }
+
+          const isActive = item.end
+            ? location.pathname === item.path
+            : location.pathname.startsWith(item.path);
+
+          const Icon = item.icon;
+
           return (
-            <div key={i} className="px-3 pt-4 pb-1.5">
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">{item.label}</p>
-            </div>
-          );
-        }
-        return (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.end}
-            onClick={onClose}
-          >
-            {({ isActive }) => (
-              <motion.div
-                whileHover={{ x: 2 }}
-                whileTap={{ scale: 0.98 }}
-                transition={{ duration: 0.15 }}
-                className={cn(
-                  'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-150 cursor-pointer relative',
-                  isActive
-                    ? 'bg-[#2563EB]/10 text-[#2563EB]'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
-                )}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-[#2563EB]"
-                    transition={{ type: 'spring', duration: 0.3, stiffness: 300, damping: 30 }}
-                  />
-                )}
-                <item.icon
-                  className={cn(
-                    'w-[18px] h-[18px] shrink-0 transition-colors',
-                    isActive ? 'text-[#2563EB]' : 'text-slate-500 group-hover:text-slate-300'
-                  )}
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.end}
+              onClick={onClose}
+              title={isRail ? item.label : undefined}
+              className={cn(
+                "relative group flex items-center rounded-lg text-xs font-medium transition-colors duration-150 py-2",
+                isRail ? "justify-center px-2" : "gap-3 px-3",
+                isActive
+                  ? "text-primary font-semibold"
+                  : "text-content-muted hover:text-content hover:bg-white/[0.04]"
+              )}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="sidebar-active-indicator"
+                  className="absolute inset-0 rounded-lg bg-primary/10 border border-primary/20"
+                  transition={{ type: "spring", stiffness: 450, damping: 35 }}
                 />
-                <span className="flex-1">{item.label}</span>
-                {item.badge && (
-                  <span className="min-w-[20px] h-5 px-1.5 bg-[#2563EB]/20 text-[#60A5FA] text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {item.badge}
-                  </span>
-                )}
-              </motion.div>
-            )}
-          </NavLink>
-        );
-      })}
-    </nav>
+              )}
 
-    <div className="p-3 border-t border-white/[0.06]">
-      <div className="flex items-center gap-3 px-3 py-2 mb-2">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#2563EB] to-[#7C3AED] flex items-center justify-center text-white text-xs font-bold shrink-0 ring-2 ring-white/[0.06]">
-          {user?.username?.[0]?.toUpperCase() || 'U'}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-200 truncate">{user?.username || 'User'}</p>
-          <p className="text-[11px] text-slate-500 truncate">{user?.email || ''}</p>
-        </div>
+              <Icon className={cn(
+                "w-4 h-4 shrink-0 transition-transform duration-150 relative z-10",
+                isActive ? "text-primary" : "text-content-subtle group-hover:text-content-muted group-hover:scale-105"
+              )} />
+
+              {!isRail && (
+                <span className="relative z-10 truncate tracking-wide">{item.label}</span>
+              )}
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      {/* User Footer Profile */}
+      <div className={cn(
+        "p-3 border-t border-white/[0.08] shrink-0 bg-[#05070A]",
+        isRail && "flex flex-col items-center gap-2"
+      )}>
+        {!isRail ? (
+          user ? (
+            <div className="flex items-center justify-between gap-2">
+              <NavLink to="/profile" className="flex items-center gap-2.5 min-w-0 group">
+                <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+                  {user?.username?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-content truncate group-hover:text-primary transition-colors">
+                    {user?.username || 'Developer'}
+                  </p>
+                  <p className="text-[10px] font-mono text-content-subtle truncate">
+                    {user?.email || 'Logged in'}
+                  </p>
+                </div>
+              </NavLink>
+              <button
+                onClick={logout}
+                className="p-1.5 rounded text-content-subtle hover:text-danger hover:bg-danger/10 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-white/[0.06] border border-white/[0.1] flex items-center justify-center text-content-muted text-xs font-mono shrink-0">
+                  G
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-content truncate">
+                    Guest Mode
+                  </p>
+                  <p className="text-[10px] font-mono text-content-subtle truncate">
+                    Instant Review Active
+                  </p>
+                </div>
+              </div>
+              <NavLink
+                to="/?authRequired=1&destination=/review"
+                className="px-2 py-1 rounded bg-primary/10 border border-primary/20 text-primary text-[10px] font-mono hover:bg-primary/20 transition-colors"
+              >
+                Sign In
+              </NavLink>
+            </div>
+          )
+        ) : (
+          user ? (
+            <>
+              <NavLink to="/profile" title={user?.username || 'Profile'}>
+                <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary text-xs font-bold">
+                  {user?.username?.[0]?.toUpperCase() || 'U'}
+                </div>
+              </NavLink>
+              <button
+                onClick={logout}
+                className="p-1.5 rounded text-content-subtle hover:text-danger hover:bg-danger/10 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <NavLink
+              to="/?authRequired=1&destination=/review"
+              title="Sign In"
+              className="w-8 h-8 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary text-xs font-bold hover:bg-primary/20 transition-colors"
+            >
+              G
+            </NavLink>
+          )
+        )}
       </div>
-      <motion.button
-        whileHover={{ x: 2 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={logout}
-        className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors duration-150"
-      >
-        <LogOut className="w-[18px] h-[18px] shrink-0" />
-        Logout
-      </motion.button>
     </div>
-  </div>
-);
-
-const Sidebar = ({ isOpen, onClose }) => {
-  const { user, logout } = useAuth();
+  );
 
   return (
     <>
-      <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:w-[260px] lg:flex-col bg-[#0F172A] border-r border-white/[0.06]">
-        <SidebarContent user={user} logout={logout} />
+      {/* Desktop Persistent Sidebar */}
+      <aside
+        className={cn(
+          "hidden lg:flex fixed inset-y-0 left-0 z-30 flex-col transition-all duration-200 ease-in-out",
+          isRail ? "w-[72px]" : "w-[232px]"
+        )}
+      >
+        {content}
       </aside>
 
+      {/* Mobile Drawer */}
       <AnimatePresence>
         {isOpen && (
           <>
@@ -145,18 +248,18 @@ const Sidebar = ({ isOpen, onClose }) => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+              transition={{ duration: 0.15 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 lg:hidden"
               onClick={onClose}
             />
             <motion.aside
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
-              className="fixed inset-y-0 left-0 z-50 w-[280px] flex flex-col bg-[#0F172A] border-r border-white/[0.06] lg:hidden"
+              transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+              className="fixed inset-y-0 left-0 z-50 w-[260px] flex flex-col lg:hidden"
             >
-              <SidebarContent onClose={onClose} user={user} logout={logout} />
+              {content}
             </motion.aside>
           </>
         )}

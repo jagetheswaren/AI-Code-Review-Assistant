@@ -3,6 +3,7 @@ import json
 import hmac
 import hashlib
 import sys
+from urllib.parse import parse_qs, urlparse
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import mongomock
@@ -92,9 +93,26 @@ def test_oauth_authorize_no_auth_header(client):
     assert response.status_code == 401
     assert response.json["error"] == "Authentication required"
 
+
+@patch('api.github_routes.decode_token')
+def test_oauth_authorize_reports_missing_credentials(mock_decode, client):
+    mock_decode.return_value = {"user_id": "test-user-id"}
+    client.application.config["GITHUB_CLIENT_ID"] = None
+    client.application.config["GITHUB_CLIENT_SECRET"] = None
+
+    response = client.get('/api/github/oauth/authorize', headers={"Authorization": "Bearer fake-jwt-token"})
+
+    assert response.status_code == 400
+    assert response.json == {
+        "error": "GitHub OAuth not configured",
+        "missing": ["GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"],
+    }
+
+
 @patch('api.github_routes.decode_token')
 def test_oauth_authorize_valid_token(mock_decode, client):
     client.application.config["GITHUB_CLIENT_ID"] = "test-client-id"
+    client.application.config["GITHUB_CLIENT_SECRET"] = "test-client-secret"
     mock_decode.return_value = {"user_id": "test-user-id"}
     
     response = client.get('/api/github/oauth/authorize', headers={"Authorization": "Bearer fake-jwt-token"})
@@ -104,7 +122,10 @@ def test_oauth_authorize_valid_token(mock_decode, client):
     assert "state" in data
     # Ensure JWT is NOT present in the returned URL
     assert "fake-jwt-token" not in data["auth_url"]
-    assert "client_id=test-client-id" in data["auth_url"]
+    query = parse_qs(urlparse(data["auth_url"]).query)
+    assert query["client_id"] == ["test-client-id"]
+    assert query["redirect_uri"] == ["http://localhost:5000/api/github/oauth/callback"]
+    assert query["state"] == [data["state"]]
 
 @patch('api.github_routes.decode_token')
 def test_oauth_authorize_pat_still_works(mock_decode, client):
@@ -115,7 +136,70 @@ def test_oauth_authorize_pat_still_works(mock_decode, client):
             response = client.post('/api/github/pat/connect', json={"token": "ghp_fake_token"}, headers={"Authorization": "Bearer fake-jwt-token"})
             assert response.status_code == 200
             assert response.json["message"] == "GitHub connected successfully"
+            assert response.json["connected"] is True
+            assert response.json["username"] == "test-user"
+            assert response.json["method"] == "pat"
+            assert "token" not in response.json
             mock_update.assert_called_once()
+
+
+@patch('api.github_routes.decode_token')
+def test_pat_connect_rejects_invalid_json_body(mock_decode, client):
+    mock_decode.return_value = {"user_id": "test-user-id"}
+    response = client.post('/api/github/pat/connect', data='not-json', headers={"Authorization": "Bearer fake-jwt-token"})
+    assert response.status_code == 400
+    assert response.json["error"] == "Token is required"
+
+
+def test_pr_analysis_returns_real_analyzer_file_findings(client, monkeypatch):
+    from database.mongodb import user_service
+    from services.analysis_service import analysis_service
+
+    registration = client.post('/api/register', json={
+        "username": "github-pr-test",
+        "email": "github-pr-test@example.com",
+        "password": "SecurePass123!",
+    })
+    assert registration.status_code == 201
+    token = registration.json["token"]
+    user = user_service.get_user_by_email("github-pr-test@example.com")
+    user_service.update_user(str(user.id), {"github_token": "test-token", "github_username": "test-user"})
+
+    mock_client = MagicMock()
+    mock_client.get_pr_details.return_value = {
+        "title": "Review unsafe command execution",
+        "body": "",
+        "head": {"sha": "test-sha"},
+    }
+    mock_client.get_pull_request_files.return_value = [{
+        "filename": "unsafe.py",
+        "patch": "+os.system(command)",
+    }]
+    mock_client.get_file_content.return_value = "import os\ndef run(command):\n    os.system(command)\n"
+    monkeypatch.setattr("services.github_client.GitHubClient", lambda *_args, **_kwargs: mock_client)
+    monkeypatch.setattr(analysis_service.ai_reviewer, "review_code_structured", lambda *_args, **_kwargs: {
+        "ai_available": False,
+        "summary": "AI review unavailable; static analysis completed.",
+        "issues": [],
+        "recommendations": [],
+        "raw": "",
+        "error": "AI provider unavailable",
+        "model": None,
+        "fallback": True,
+    })
+
+    response = client.post(
+        "/api/github/repos/acme/widgets/pull-requests/12/analyze",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"post_comment": False},
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["files_reviewed"] == 1
+    assert body["total_issues"] >= 1
+    assert body["file_analyses"][0]["file_path"] == "unsafe.py"
+    assert any(issue["rule_id"] == "SECURITY_OS_SYSTEM" for issue in body["file_analyses"][0]["issues"])
 
 def test_oauth_callback_invalid_state(client):
     # Missing session state

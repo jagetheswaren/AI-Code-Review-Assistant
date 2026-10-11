@@ -23,22 +23,23 @@ export const Dropdown = ({ trigger, items = [], align = 'right', className }) =>
               initial={{ opacity: 0, y: 4, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 4, scale: 0.98 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
               className={cn(
-                'absolute z-50 mt-2 min-w-[180px] bg-[#1E293B] border border-white/[0.06] rounded-xl shadow-2xl shadow-black/40 py-1 overflow-hidden',
+                'absolute z-50 mt-2 min-w-[180px] bg-surface border border-surface-border rounded-md shadow-dropdown py-1 overflow-hidden',
                 align === 'right' ? 'right-0' : 'left-0',
                 className
               )}
             >
               {items.map((item, i) => (
                 item.separator ? (
-                  <div key={i} className="border-t border-white/[0.06] my-1" />
+                  <div key={i} className="border-t border-surface-border my-1" />
                 ) : (
                   <button
                     key={i}
                     onClick={() => { item.onClick?.(); setOpen(false); }}
                     className={cn(
-                      'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors',
-                      item.danger ? 'text-red-400 hover:bg-red-500/10' : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                      'w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors',
+                      item.danger ? 'text-critical hover:bg-critical/10' : 'text-content-muted hover:bg-surface-elevated hover:text-content'
                     )}
                   >
                     {item.icon && <item.icon className="w-4 h-4 shrink-0" />}

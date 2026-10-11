@@ -16,7 +16,9 @@ from models.review import Issue, IssueType, Severity
 @pytest.fixture
 def reviewer():
     # Use dummy URL to avoid accidental real Ollama calls in unit tests
-    return AIReviewer(model="qwen2.5-coder:7b", base_url="http://127.0.0.1:11434", timeout=5)
+    rev = AIReviewer(model="qwen2.5-coder:7b", base_url="http://127.0.0.1:11434", timeout=5)
+    rev.groq_client = None
+    return rev
 
 
 class TestOllamaConnection:
@@ -24,7 +26,7 @@ class TestOllamaConnection:
         with patch("reviewer.ai_reviewer.requests.get", side_effect=ConnectionError("refused")):
             health = reviewer.check_health()
             assert health["reachable"] is False
-            assert "refused" in health["error"]
+            assert "unreachable" in health["error"]
 
     def test_check_health_success(self, reviewer):
         mock_resp = MagicMock()
@@ -51,6 +53,42 @@ class TestOllamaConnection:
             ok, msg = reviewer.is_model_available()
             assert ok is False
             assert "not found" in msg.lower()
+
+class TestGroqProvider:
+    def test_groq_health_uses_configured_model_and_reports_ollama_fallback(self, reviewer):
+        reviewer.groq_client = MagicMock()
+        reviewer.groq_model = "openai/gpt-oss-120b"
+        reviewer.groq_client.models.list.return_value.data = [
+            MagicMock(id="openai/gpt-oss-120b")
+        ]
+        ollama_health = {
+            "reachable": False,
+            "models": [],
+            "error": "Ollama at http://127.0.0.1:11434 is unreachable.",
+            "provider": "none",
+            "model": None,
+            "ollama_status": "unreachable",
+            "ollama_models": [],
+        }
+        with patch.object(reviewer, "_check_ollama_health", return_value=ollama_health):
+            health = reviewer.check_health()
+
+        assert health["provider"] == "groq"
+        assert health["model"] == "openai/gpt-oss-120b"
+        assert health["groq_status"] == "available"
+        assert health["ollama_status"] == "unreachable"
+
+    def test_groq_failure_falls_back_to_configured_ollama_model(self, reviewer):
+        reviewer.groq_client = MagicMock()
+        reviewer.groq_client.chat.completions.create.side_effect = RuntimeError("provider unavailable")
+        response = MagicMock(status_code=200)
+        response.json.return_value = {"message": {"content": "Ollama review"}}
+
+        with patch("reviewer.ai_reviewer.requests.post", return_value=response) as post:
+            result = reviewer._query_llm("review", json_mode=False)
+
+        assert result == "Ollama review"
+        assert post.call_args.kwargs["json"]["model"] == reviewer.ollama_model
 
 
 class TestStructuredPrompt:
@@ -172,7 +210,7 @@ class TestIntegrationWithStatic:
     def test_static_not_replaced(self):
         """AI + static aggregation: ensure both present"""
         from app import create_app
-        from api import review_routes
+        from services import analysis_service
         app = create_app(mongo_client=mongomock.MongoClient(), database_name="ai_agg_test")
         app.config.update(TESTING=True)
         client = app.test_client()
@@ -187,7 +225,7 @@ class TestIntegrationWithStatic:
             "model": "qwen2.5-coder:7b",
             "fallback": False,
         }
-        with patch.object(review_routes.ai_reviewer, "review_code_structured", return_value=mock_ai):
+        with patch.object(analysis_service.AIReviewer, "review_code_structured", return_value=mock_ai):
             # register and analyze
             reg = client.post("/api/register", json={"username": "aiuser", "email": "ai@test.com", "password": "SecurePass123!"})
             assert reg.status_code == 201
@@ -209,7 +247,7 @@ class TestIntegrationWithStatic:
 
     def test_ai_fallback_still_returns_static(self):
         from app import create_app
-        from api import review_routes
+        from services import analysis_service
         app = create_app(mongo_client=mongomock.MongoClient(), database_name="ai_fallback_test")
         app.config.update(TESTING=True)
         client = app.test_client()
@@ -223,7 +261,7 @@ class TestIntegrationWithStatic:
             "model": "qwen2.5-coder:7b",
             "fallback": True,
         }
-        with patch.object(review_routes.ai_reviewer, "review_code_structured", return_value=mock_ai):
+        with patch.object(analysis_service.AIReviewer, "review_code_structured", return_value=mock_ai):
             reg = client.post("/api/register", json={"username": "aiuser2", "email": "ai2@test.com", "password": "SecurePass123!"})
             token = reg.get_json()["token"]
             headers = {"Authorization": f"Bearer {token}"}

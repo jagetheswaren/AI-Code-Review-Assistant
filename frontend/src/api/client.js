@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getErrorMessage } from '../utils/errorUtils';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
@@ -19,16 +20,29 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const message = getErrorMessage(error, 'API request failed.');
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      const publicPaths = ['/', '/landing', '/review'];
+      if (!publicPaths.includes(window.location.pathname)) {
+        const destination = encodeURIComponent(window.location.pathname);
+        window.location.href = `/?authRequired=1&destination=${destination}`;
+      }
     }
-    return Promise.reject(error);
+    const normalized = new Error(message);
+    normalized.name = error.name || 'ApiError';
+    normalized.response = error.response;
+    normalized.status = error.response?.status;
+    normalized.code = error.code;
+    return Promise.reject(normalized);
   }
 );
 
 export const analyzeCode = (code, filename) =>
   api.post('/analyze', { code, filename });
+
+export const claimScan = (requestId) =>
+  api.post(`/scan/${requestId}/claim`);
 
 export const analyzeFile = (file) => {
   const formData = new FormData();
@@ -71,8 +85,10 @@ export const refreshToken = () =>
 export const getGitHubStatus = () =>
   api.get('/github/status');
 
-export const getGitHubOAuthUrl = () =>
+export const getGitHubAuthUrl = () =>
   api.get('/github/oauth/authorize').then(res => res.data);
+
+export const getGitHubOAuthUrl = getGitHubAuthUrl;
 
 export const getGitHubRepos = () =>
   api.get('/github/repos');

@@ -14,7 +14,7 @@ from middleware.security import init_middleware
 def create_app(*, mongo_client=None, database_name="code_review_assistant"):
     """Create the Flask application; tests may inject an in-memory Mongo client."""
     if mongo_client is None:
-        settings.validate_production_settings()
+        settings.validate_settings()
 
     dictConfig({
         "version": 1,
@@ -38,6 +38,7 @@ def create_app(*, mongo_client=None, database_name="code_review_assistant"):
         FRONTEND_URL=settings.cors_origins.split(",")[0].strip() if settings.cors_origins else "http://localhost:3000",
         OLLAMA_BASE_URL=settings.ollama_base_url,
         OLLAMA_MODEL=settings.ollama_model,
+        GROQ_MODEL=settings.groq_model,
         SESSION_COOKIE_SAMESITE='None' if settings.flask_env == "production" else 'Lax',
         SESSION_COOKIE_SECURE=True if settings.flask_env == "production" else False,
     )

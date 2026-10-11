@@ -82,6 +82,11 @@ class SecurityAnalyzer:
             'pickle.loads': ('CRITICAL', 'Pickle deserialization allows arbitrary code execution'),
             'pickle.load': ('CRITICAL', 'Pickle deserialization allows arbitrary code execution'),
             'yaml.load': ('HIGH', 'YAML deserialization can execute arbitrary code'),
+            'tempfile.mktemp': ('HIGH', 'Insecure temporary file creation with mktemp() leads to race conditions (CWE-377)'),
+            'hashlib.md5': ('MEDIUM', 'MD5 is cryptographically weak; susceptible to collisions (CWE-328)'),
+            'hashlib.sha1': ('MEDIUM', 'SHA-1 is cryptographically weak; susceptible to collisions (CWE-328)'),
+            'telnetlib.Telnet': ('HIGH', 'Telnet transmits plaintext credentials; use SSH or TLS'),
+            'ftplib.FTP': ('MEDIUM', 'FTP transmits credentials unencrypted; use SFTP or FTPS'),
         }
 
         func_name = self._get_call_name(node)
@@ -113,6 +118,30 @@ class SecurityAnalyzer:
                         file_path=file_path,
                         source=["ast"]
                     ))
+
+        # Check for SQL injection in execute / raw_sql calls
+        if (func_name.endswith('.execute') or func_name == 'execute') and node.args:
+            first_arg = node.args[0]
+            is_dynamic_sql = False
+            if isinstance(first_arg, ast.JoinedStr):  # f-string
+                is_dynamic_sql = True
+            elif isinstance(first_arg, ast.BinOp) and isinstance(first_arg.op, (ast.Add, ast.Mod)):
+                is_dynamic_sql = True
+            elif isinstance(first_arg, ast.Call) and getattr(first_arg.func, 'attr', '') == 'format':
+                is_dynamic_sql = True
+
+            if is_dynamic_sql:
+                issues.append(Issue(
+                    type=IssueType.SECURITY,
+                    severity=Severity.CRITICAL,
+                    line_number=node.lineno,
+                    message='Potential SQL injection: query dynamically concatenated via string formatting',
+                    rule_id='SECURITY_SQL_INJECTION',
+                    suggestion='Use parameterized queries with placeholder bindings instead of string interpolation',
+                    code_snippet=self._get_code_snippet(lines, node.lineno),
+                    file_path=file_path,
+                    source=["ast"]
+                ))
 
         return issues
 
@@ -243,6 +272,11 @@ class SecurityAnalyzer:
             'pickle.loads': 'Use json.loads() or other safe serialization formats',
             'pickle.load': 'Use json.load() or other safe serialization formats',
             'yaml.load': 'Use yaml.safe_load() instead of yaml.load()',
+            'tempfile.mktemp': 'Use tempfile.NamedTemporaryFile() or tempfile.mkstemp() to prevent race conditions',
+            'hashlib.md5': 'Use hashlib.sha256() or higher algorithm for secure cryptographic hashing',
+            'hashlib.sha1': 'Use hashlib.sha256() or higher algorithm for secure cryptographic hashing',
+            'telnetlib.Telnet': 'Migrate to paramiko / SSH or TLS encrypted communication',
+            'ftplib.FTP': 'Use paramiko SFTP or ftplib.FTP_TLS for encrypted transport',
         }
         return suggestions.get(func_name, 'Review usage for security implications')
 

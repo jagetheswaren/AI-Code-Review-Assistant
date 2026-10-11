@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { getErrorMessage } from '../utils/errorUtils';
 
 const ToastContext = createContext(null);
 
@@ -9,7 +10,7 @@ export const ToastProvider = ({ children }) => {
 
   const addToast = useCallback((message, type = 'info', duration = 4000) => {
     const id = ++toastId;
-    const toast = { id, message, type, visible: true };
+    const toast = { id, message: getErrorMessage(message, 'Something went wrong.'), type, visible: true };
     setToasts(prev => [...prev, toast]);
     if (duration > 0) {
       setTimeout(() => {
@@ -26,13 +27,26 @@ export const ToastProvider = ({ children }) => {
   const info = useCallback((msg) => addToast(msg, 'info'), [addToast]);
   const ai = useCallback((msg) => addToast(msg, 'ai'), [addToast]);
 
+  const toast = useCallback((options, maybeType) => {
+    if (typeof options === 'string') {
+      return addToast(options, maybeType || 'info');
+    }
+    if (options && typeof options === 'object') {
+      const msg = options.title || options.message || options.description || 'Notification';
+      const variant = options.variant || options.type || maybeType || 'info';
+      const duration = options.duration !== undefined ? options.duration : (variant === 'error' ? 6000 : 4000);
+      return addToast(msg, variant, duration);
+    }
+    return addToast(String(options || ''), 'info');
+  }, [addToast]);
+
   const removeToast = useCallback((id) => {
     setToasts(prev => prev.map(t => t.id === id ? { ...t, visible: false } : t));
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 300);
   }, []);
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast, success, error, warning, info, ai }}>
+    <ToastContext.Provider value={{ toasts, addToast, removeToast, success, error, warning, info, ai, toast }}>
       {children}
       <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
         {toasts.map(toast => (

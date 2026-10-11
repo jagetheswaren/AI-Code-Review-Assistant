@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import os
 import threading
+from urllib.parse import urlencode
 from flask import Blueprint, request, jsonify, redirect, current_app, g
 import requests as http_requests
 from functools import wraps
@@ -37,8 +38,14 @@ def token_required(f):
 @token_required
 def github_authorize():
     client_id = current_app.config.get('GITHUB_CLIENT_ID')
+    client_secret = current_app.config.get('GITHUB_CLIENT_SECRET')
+    missing = []
     if not client_id:
-        return jsonify({"error": "GitHub OAuth not configured"}), 500
+        missing.append("GITHUB_CLIENT_ID")
+    if not client_secret:
+        missing.append("GITHUB_CLIENT_SECRET")
+    if missing:
+        return jsonify({"error": "GitHub OAuth not configured", "missing": missing}), 400
 
     state = secrets.token_urlsafe(32)
     from flask import session
@@ -46,8 +53,14 @@ def github_authorize():
     session['github_oauth_user'] = g.current_user['user_id']
 
     scopes = "repo,user,read:org"
-    callback_url = current_app.config.get('GITHUB_OAUTH_CALLBACK_URL', 'http://localhost:5000/api/github/oauth/callback')
-    auth_url = f"https://github.com/login/oauth/authorize?client_id={client_id}&scope={scopes}&state={state}&redirect_uri={callback_url}"
+    callback_url = current_app.config.get('GITHUB_OAUTH_CALLBACK_URL') or 'http://localhost:5000/api/github/oauth/callback'
+    query = urlencode({
+        "client_id": client_id,
+        "scope": scopes,
+        "state": state,
+        "redirect_uri": callback_url,
+    })
+    auth_url = f"https://github.com/login/oauth/authorize?{query}"
     return jsonify({"auth_url": auth_url, "state": state})
 
 
@@ -102,7 +115,8 @@ def github_callback():
             "github_id": gh_user["id"],
             "github_username": gh_user["login"],
             "github_token": access_token,
-            "avatar_url": gh_user.get("avatar_url")
+            "avatar_url": gh_user.get("avatar_url"),
+            "github_auth_method": "oauth",
         })
 
     session.pop('github_oauth_state', None)
@@ -119,16 +133,18 @@ def github_status():
     connected = bool(user and user.github_token)
     return jsonify({
         "connected": connected,
+        "username": user.github_username if user else None,
         "github_username": user.github_username if user else None,
-        "avatar_url": user.avatar_url if user else None
+        "avatar_url": user.avatar_url if user else None,
+        "method": user.github_auth_method if user and connected else None,
     })
 
 
 @github_bp.route('/api/github/pat/connect', methods=['POST'])
 @token_required
 def github_pat_connect():
-    data = request.get_json()
-    pat_token = data.get('token', '').strip()
+    data = request.get_json(silent=True) or {}
+    pat_token = data.get('token', '').strip() if isinstance(data.get('token'), str) else ''
     if not pat_token:
         return jsonify({"error": "Token is required"}), 400
 
@@ -146,15 +162,20 @@ def github_pat_connect():
             "github_id": gh_user["id"],
             "github_username": gh_user["login"],
             "github_token": pat_token,
-            "avatar_url": gh_user.get("avatar_url")
+            "avatar_url": gh_user.get("avatar_url"),
+            "github_auth_method": "pat",
         })
 
         return jsonify({
+            "connected": True,
+            "username": gh_user["login"],
+            "avatar_url": gh_user.get("avatar_url"),
+            "method": "pat",
             "message": "GitHub connected successfully",
             "github_username": gh_user["login"]
         })
     except Exception as e:
-        current_app.logger.error(f"PAT connect failed: {e}")
+        current_app.logger.error("PAT connect failed (%s)", type(e).__name__)
         return jsonify({"error": "Failed to connect GitHub"}), 500
 
 
@@ -165,7 +186,8 @@ def github_disconnect():
         "github_id": None,
         "github_username": None,
         "github_token": None,
-        "avatar_url": None
+        "avatar_url": None,
+        "github_auth_method": None,
     })
     return jsonify({"message": "GitHub account disconnected"})
 
@@ -190,7 +212,7 @@ def list_repos():
                 "full_name": repo_data["full_name"],
                 "description": repo_data.get("description"),
                 "language": repo_data.get("language"),
-                "default_branch": repo_data.get("default_branch", "main"),
+                "default_branch": repo_data.get("default_branch"),
                 "private": repo_data.get("private", False),
                 "stargazers_count": repo_data.get("stargazers_count", 0),
                 "forks_count": repo_data.get("forks_count", 0),
@@ -436,7 +458,12 @@ def analyze_pull_request(repo_full_name, pr_number):
             )
             response.file_analyses.append(fa)
 
-        from database.mongodb import scan_service, ScanRecord, FileAnalysis as MongoFileAnalysis, AnalysisSummary as MongoAnalysisSummary
+        from database.mongodb import scan_service
+        from models.mongodb_models import (
+            AnalysisSummary as MongoAnalysisSummary,
+            FileAnalysis as MongoFileAnalysis,
+            ScanRecord,
+        )
         scan = ScanRecord(
             user_id=user.id,
             request_id=response.request_id,
@@ -469,6 +496,7 @@ def analyze_pull_request(repo_full_name, pr_number):
             "total_issues": response.summary.total_issues,
             "overall_risk": response.summary.overall_risk,
             "summary": response.summary.model_dump(),
+            "file_analyses": [file_analysis.model_dump() for file_analysis in response.file_analyses],
             "ai_review": response.ai_review,
             "ai_available": response.ai_available,
             "ai_error": response.ai_error,

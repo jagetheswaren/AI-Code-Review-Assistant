@@ -36,11 +36,23 @@ def token_required(f):
     return decorated
 
 
+def optional_token(f):
+    """Allows unauthenticated instant code reviews while setting g.current_user if token is present."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            token = auth_header.split(' ')[1]
+            payload = decode_token(token)
+            if payload:
+                g.current_user = payload
+        return f(*args, **kwargs)
+    return decorated
 
 
 @review_bp.route('/api/analyze', methods=['POST'])
-@rate_limit(max_requests=20, window=60)
-@token_required
+@rate_limit(max_requests=30, window=60)
+@optional_token
 def analyze_code():
     data = request.get_json()
     if not data or 'code' not in data:
@@ -91,8 +103,8 @@ def _perform_analysis(code: str, filename: str, github_pr_url=None, github_pr_nu
 
 
 @review_bp.route('/api/analyze/file', methods=['POST'])
-@rate_limit(max_requests=20, window=60)
-@token_required
+@rate_limit(max_requests=30, window=60)
+@optional_token
 def analyze_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
@@ -262,20 +274,47 @@ def ai_health():
 
 @review_bp.route('/api/ai/status', methods=['GET'])
 def ai_status():
-    """Detailed AI status including Ollama health and model check."""
-    health = analysis_service.ai_reviewer.check_health()
-    available, msg = analysis_service.ai_reviewer.is_model_available()
-    
+    """Safe provider status with an explicit static-analysis fallback."""
+    reviewer = analysis_service.ai_reviewer
+    health = reviewer.check_health()
+    provider = health.get("provider", "none")
+    available = bool(health["reachable"] and provider in ("groq", "ollama"))
+    ollama_status = health.get("ollama_status", "not_checked")
+    if available:
+        message = None
+        next_command = None
+        fallback = "ollama" if provider == "groq" and ollama_status == "available" else "static"
+    elif ollama_status == "model_missing":
+        message = f"Ollama is running, but {reviewer.ollama_model} is not installed."
+        next_command = f"ollama pull {reviewer.ollama_model}"
+        fallback = "static"
+    elif reviewer.groq_client and health.get("groq_status") != "available":
+        message = f"{health.get('groq_error') or 'Groq is unavailable.'} Ollama is not available; static analysis is still available."
+        next_command = f"ollama serve && ollama pull {reviewer.ollama_model}"
+        fallback = "static"
+    else:
+        message = f"Ollama is not running at {reviewer.base_url}. Static analysis is still available."
+        next_command = f"ollama serve && ollama pull {reviewer.ollama_model}"
+        fallback = "static"
+
     ml_info = analysis_service.ml_classifier.get_model_info() if analysis_service.ml_classifier else None
-    
     return jsonify({
+        "available": available,
+        "provider": provider if available else "none",
+        "model": health.get("model") if available else None,
+        "fallback": fallback,
+        "static_analysis": True,
+        "message": message,
+        "next_command": next_command,
+        "groq_status": health.get("groq_status", "not_configured"),
+        "ollama_status": ollama_status,
+        "expected_model": reviewer.ollama_model,
         "ai_available": available,
         "reachable": health["reachable"],
         "models": health["models"],
-        "expected_model": analysis_service.ai_reviewer.model,
-        "base_url": analysis_service.ai_reviewer.base_url,
-        "error": msg if not available else None,
-        "ollama_error": health["error"],
+        "base_url": reviewer.base_url,
+        "error": health.get("error") if not available else None,
+        "ollama_error": health.get("ollama_error") if ollama_status != "available" else None,
         "ml_model_info": ml_info
     }), 200
 
@@ -377,6 +416,30 @@ def get_report(request_id):
     except Exception as e:
         current_app.logger.error(f"Failed to get report: {e}")
         return jsonify({"error": "Failed to get report"}), 500
+
+
+@review_bp.route('/api/scan/<request_id>/claim', methods=['POST'])
+@token_required
+def claim_scan(request_id):
+    """Allows an authenticated user to claim an unauthenticated or guest scan into their personal history."""
+    user_id = g.current_user.get('user_id') if hasattr(g, 'current_user') else None
+    if not user_id:
+        return jsonify({"error": "User not authenticated"}), 401
+
+    scan = scan_service.get_scan_by_request_id(request_id)
+    if not scan:
+        return jsonify({"error": "Scan not found"}), 404
+
+    if scan.user_id:
+        if str(scan.user_id) == user_id:
+            return jsonify({"message": "Scan already linked to your account", "scan_id": str(scan.id)}), 200
+        return jsonify({"error": "Scan is already owned by another account"}), 403
+
+    claimed = scan_service.claim_scan(request_id, user_id)
+    if claimed:
+        updated = scan_service.get_scan_by_request_id(request_id)
+        return jsonify({"message": "Scan saved to your history", "scan_id": str(updated.id) if updated else None}), 200
+    return jsonify({"error": "Failed to claim scan"}), 500
 
 
 @review_bp.route('/api/dashboard', methods=['GET'])

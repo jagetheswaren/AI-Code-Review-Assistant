@@ -8,7 +8,6 @@ import ollama
 
 from models.review import Issue
 from config import settings
-from ml.nlp_explainer import create_explainer
 
 logger = logging.getLogger(__name__)
 
@@ -20,61 +19,99 @@ class AIReviewer:
     """Ollama-backed reviewer with structured JSON support and robust fallback."""
 
     def __init__(self, model: str = None, base_url: str = None, timeout: int = None):
-        self.model = model or settings.ollama_model
+        self.ollama_model = model or settings.ollama_model
+        self.groq_model = settings.groq_model
+        self.model = self.groq_model if settings.groq_api_key else self.ollama_model
         self.base_url = (base_url or settings.ollama_base_url).rstrip("/")
         self.timeout = timeout or getattr(settings, "ollama_timeout", 30)
         # ollama.Client expects host without trailing slash
         self.client = ollama.Client(host=self.base_url)
-        self.nlp_explainer = create_explainer()
-        
-        # Groq Fallback setup
         self.groq_api_key = settings.groq_api_key
         self.groq_client = None
-        self.groq_model = "llama-3.3-70b-versatile"
+        self.groq_setup_error = None
         if self.groq_api_key:
             try:
                 from groq import Groq
-                self.groq_client = Groq(api_key=self.groq_api_key)
-                self.model = self.groq_model # Override default model string for status checks
+                self.groq_client = Groq(api_key=self.groq_api_key, timeout=self.timeout)
             except ImportError:
+                self.groq_setup_error = "Groq SDK is not installed."
+                self.groq_setup_status = "sdk_unavailable"
                 logger.warning("Groq SDK not installed. Fallback unavailable.")
+        else:
+            self.groq_setup_status = "not_configured"
 
     # ------------------------------------------------------------------
     # Connectivity helpers
     # ------------------------------------------------------------------
     def check_health(self) -> Dict[str, Any]:
-        """Probe Ollama /api/tags or Groq. Returns {reachable, models, error}."""
+        """Check configured Groq first, then Ollama as its fallback."""
+        groq_status = getattr(self, "groq_setup_status", "unavailable")
+        groq_error = self.groq_setup_error
         if self.groq_client:
-            return {"reachable": True, "models": [self.groq_model], "error": None}
-            
+            try:
+                response = self.groq_client.models.list()
+                models = [getattr(item, "id", None) for item in getattr(response, "data", [])]
+                if self.groq_model in models:
+                    ollama_health = self._check_ollama_health()
+                    return {
+                        "reachable": True,
+                        "models": models,
+                        "error": None,
+                        "provider": "groq",
+                        "model": self.groq_model,
+                        "groq_status": "available",
+                        "ollama_status": ollama_health["ollama_status"],
+                        "ollama_models": ollama_health["ollama_models"],
+                        "ollama_error": ollama_health.get("error"),
+                    }
+                groq_status = "model_missing"
+                groq_error = f"Configured Groq model '{self.groq_model}' was not returned by the provider."
+            except Exception as error:
+                status_code = getattr(error, "status_code", None)
+                groq_status = "unreachable"
+                groq_error = f"Groq request failed ({status_code})." if status_code else f"Groq request failed ({type(error).__name__})."
+
+        health = self._check_ollama_health()
+        health.update({"groq_status": groq_status, "groq_error": groq_error})
+        health.setdefault("ollama_error", health.get("error"))
+        return health
+
+    def _check_ollama_health(self) -> Dict[str, Any]:
         if not self.base_url or not self.base_url.strip():
-            return {"reachable": False, "models": [], "error": "OLLAMA_BASE_URL not configured (empty). Production AI BLOCKED."}
-        # Production localhost guard: Render cannot reach laptop localhost
+            return {"reachable": False, "models": [], "error": "OLLAMA_BASE_URL is not configured.", "provider": "none", "model": None, "ollama_status": "unreachable", "ollama_models": []}
         if settings.flask_env.lower() == "production" and ("localhost" in self.base_url or "127.0.0.1" in self.base_url):
-            return {"reachable": False, "models": [], "error": f"Production AI BLOCKED: OLLAMA_BASE_URL {self.base_url} is localhost and not reachable from cloud. Configure a reachable AI endpoint."}
-        url = f"{self.base_url}/api/tags"
+            error = f"Ollama at {self.base_url} is localhost and cannot be reached from production."
+            return {"reachable": False, "models": [], "error": error, "provider": "none", "model": None, "ollama_status": "unreachable", "ollama_models": []}
         try:
-            resp = requests.get(url, timeout=5)
+            resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
             if resp.status_code != 200:
-                return {"reachable": False, "models": [], "error": f"HTTP {resp.status_code}"}
+                error = f"Ollama returned HTTP {resp.status_code}."
+                return {"reachable": False, "models": [], "error": error, "provider": "none", "model": None, "ollama_status": "unreachable", "ollama_models": []}
             data = resp.json()
             models = [m.get("name") for m in data.get("models", [])]
-            return {"reachable": True, "models": models, "error": None}
-        except Exception as e:
-            msg = str(e)
-            if "timed out" in msg.lower() or "timeout" in msg.lower():
-                return {"reachable": False, "models": [], "error": f"Timeout after 5s: {msg}"}
-            return {"reachable": False, "models": [], "error": msg}
+            available = self.ollama_model in models
+            return {
+                "reachable": available,
+                "models": models,
+                "error": None if available else f"Ollama model '{self.ollama_model}' was not found.",
+                "provider": "ollama" if available else "none",
+                "model": self.ollama_model if available else None,
+                "ollama_status": "available" if available else "model_missing",
+                "ollama_models": models,
+            }
+        except Exception as error:
+            reason = "timed out" if isinstance(error, requests.Timeout) else "unreachable"
+            safe_error = f"Ollama at {self.base_url} is {reason}."
+            return {"reachable": False, "models": [], "error": safe_error, "provider": "none", "model": None, "ollama_status": "unreachable", "ollama_models": []}
 
     def is_model_available(self) -> Tuple[bool, str]:
-        if self.groq_client:
-            return True, ""
-            
         health = self.check_health()
         if not health["reachable"]:
-            return False, f"Ollama unreachable: {health['error']}"
-        if self.model not in health["models"]:
-            return False, f"Model '{self.model}' not found. Available: {health['models']}"
+            return False, f"Ollama unreachable: {health['error']}" if health.get("provider") != "groq" else (health["error"] or "No AI provider is available.")
+        if health.get("provider") == "groq":
+            return True, ""
+        if self.ollama_model not in health.get("models", []):
+            return False, f"Model '{self.ollama_model}' not found. Available: {health.get('models', [])}"
         return True, ""
 
     def is_available(self) -> bool:
@@ -85,17 +122,8 @@ class AIReviewer:
     # Issue enrichment (CodeBERT fallback)
     # ------------------------------------------------------------------
     def enhance_issue_with_nlp(self, issue: Issue, code_context: str = "") -> Issue:
-        try:
-            issue.explanation = self.nlp_explainer.generate_explanation(
-                issue.model_dump(), code_context
-            )
-            issue.fix_suggestion = self.nlp_explainer.generate_fix_suggestion(
-                issue.model_dump(), code_context
-            )
-        except Exception as e:
-            logger.warning("NLP enhancement failed: %s", e)
-            issue.explanation = issue.message
-            issue.fix_suggestion = issue.suggestion or "Review this issue and apply appropriate fixes."
+        # NLP Explainer has been removed in favor of pure LLM explanations 
+        # (which are handled at the review level, not per-issue static analysis injection).
         return issue
 
     # ------------------------------------------------------------------
@@ -220,33 +248,38 @@ Provide a 2-3 sentence executive summary highlighting the most critical issues a
     def _query_llm(self, prompt: str, json_mode: bool = False, timeout: Optional[int] = None) -> str:
         """Low-level chat call with timeout. Never raises; returns string or error message."""
         effective_timeout = timeout or self.timeout
-        
-        # If Groq is configured, use it (primary for Cloud)
+        groq_error = None
+
         if self.groq_client:
             try:
+                kwargs = {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "model": self.groq_model,
+                    "temperature": 0.3,
+                }
+                if json_mode:
+                    kwargs["response_format"] = {"type": "json_object"}
                 response = self.groq_client.chat.completions.create(
-                    messages=[{"role": "user", "content": prompt}],
-                    model=self.groq_model,
-                    response_format={"type": "json_object"} if json_mode else {"type": "text"},
-                    temperature=0.3
+                    **kwargs
                 )
                 content = response.choices[0].message.content
                 if content:
                     return content.strip()
             except Exception as e:
-                return f"AI review unavailable: Groq API error ({e})"
+                status_code = getattr(e, "status_code", None)
+                groq_error = f"Groq request failed ({status_code})." if status_code else f"Groq request failed ({type(e).__name__})."
 
-        # Fallback to Ollama (primary for Local)
         if not self.base_url or not self.base_url.strip():
-            return "AI review unavailable: OLLAMA_BASE_URL not configured"
-        # Production localhost guard
+            detail = f" {groq_error}" if groq_error else ""
+            return f"AI review unavailable: OLLAMA_BASE_URL not configured.{detail}"
         if settings.flask_env.lower() == "production" and ("localhost" in self.base_url or "127.0.0.1" in self.base_url):
-            return f"AI review unavailable: Ollama at {self.base_url} not reachable from production (configure OLLAMA_BASE_URL)"
+            detail = f" {groq_error}" if groq_error else ""
+            return f"AI review unavailable: Ollama at {self.base_url} is not reachable from production.{detail}"
 
-        # Try via requests with timeout (preferred, respects timeout)
+        ollama_error = None
         try:
             payload = {
-                "model": self.model,
+                "model": self.ollama_model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": False,
                 "options": {"temperature": 0.3, "num_predict": 600},
@@ -259,35 +292,27 @@ Provide a 2-3 sentence executive summary highlighting the most critical issues a
                 content = j.get("message", {}).get("content", "") or j.get("response", "")
                 if content:
                     return content.strip()
-            # Fallback to ollama client if requests returns non-200 or empty
+            ollama_error = f"Ollama returned HTTP {resp.status_code}."
         except Exception as e:
-            # If requests fails due to connection, map to unavailable
-            msg = str(e)
-            if "timed out" in msg.lower() or "timeout" in msg.lower():
-                return f"AI review unavailable: Ollama timeout after {effective_timeout}s ({msg})"
-            if "connection" in msg.lower() or "refused" in msg.lower():
-                # Try client fallback before giving up, but if both fail, report
-                pass
-            # Continue to client fallback below
-            logger.debug("Requests chat failed, trying client fallback: %s", e)
+            reason = "timed out" if isinstance(e, requests.Timeout) else "unreachable"
+            ollama_error = f"Ollama at {self.base_url} is {reason}."
 
         try:
             response = self.client.chat(
-                model=self.model,
+                model=self.ollama_model,
                 messages=[{"role": "user", "content": prompt}],
                 options={"temperature": 0.3, "num_predict": 600},
             )
             content = response.get("message", {}).get("content", "") or response.get("response", "")
-            return content.strip()
+            if content:
+                return content.strip()
+            ollama_error = "Ollama returned an empty response."
         except Exception as e:
-            msg = str(e)
-            if "timed out" in msg.lower() or "timeout" in msg.lower():
-                return f"AI review unavailable: Ollama timeout after {effective_timeout}s ({msg})"
-            if "connection" in msg.lower() or "refused" in msg.lower():
-                return f"AI review unavailable: Ollama not reachable at {self.base_url} ({msg})"
-            if "model" in msg.lower() and "not found" in msg.lower():
-                return f"AI review unavailable: model '{self.model}' not found ({msg})"
-            return f"AI review unavailable: {msg}"
+            reason = "timed out" if isinstance(e, requests.Timeout) else "unreachable"
+            ollama_error = f"Ollama at {self.base_url} is {reason}."
+
+        details = " ".join(item for item in (groq_error, ollama_error) if item)
+        return f"AI review unavailable: {details or 'No AI provider responded.'}"
 
     def _safe_json_parse(self, text: str) -> Optional[Dict[str, Any]]:
         """Try to extract and parse JSON from model output. Repairs common malformations."""

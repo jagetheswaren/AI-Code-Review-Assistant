@@ -11,3 +11,4 @@ export { EmptyState } from './EmptyState';
 export { LoadingSpinner, PageLoader } from './LoadingSpinner';
 export { Tooltip } from './Tooltip';
 export { Dropdown } from './Dropdown';
+export { ErrorBoundary } from './ErrorBoundary';

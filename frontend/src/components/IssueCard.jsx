@@ -53,11 +53,23 @@ const IssueCard = ({ issue, index }) => {
         </span>
         {issue.source && issue.source.length > 0 && (
           <div className="source-badges" style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
-            {issue.source.map(src => (
-              <span key={src} className="source-badge" style={{ fontSize: '0.75rem', padding: '0.125rem 0.5rem', borderRadius: '9999px', backgroundColor: '#e5e7eb', color: '#374151', textTransform: 'uppercase' }}>
-                {src}
-              </span>
-            ))}
+            {issue.source.map(src => {
+              const isML = src.toLowerCase() === 'ml' || src.toLowerCase() === 'ai';
+              return (
+                <span key={src} className="source-badge" style={{ 
+                  fontSize: '0.75rem', 
+                  padding: '0.125rem 0.5rem', 
+                  borderRadius: '9999px', 
+                  backgroundColor: isML ? '#8b5cf6' : '#e5e7eb', 
+                  color: isML ? '#ffffff' : '#374151', 
+                  textTransform: 'uppercase',
+                  fontWeight: isML ? '600' : '500',
+                  boxShadow: isML ? '0 0 10px rgba(139,92,246,0.5)' : 'none'
+                }}>
+                  {src === 'ai' ? 'AI Assistant' : src}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>

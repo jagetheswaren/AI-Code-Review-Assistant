@@ -17,3 +17,6 @@ backend_error.log
 backend_output.log
 models/
 *.joblib
+frontend/playwright-report/
+frontend/test-results/
+.vscode/

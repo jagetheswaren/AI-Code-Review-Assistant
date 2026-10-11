@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@hookform/resolvers": "^5.5.7",
     "@monaco-editor/react": "^4.7.0",
     "@tanstack/react-query": "^5.101.4",
@@ -14,7 +15,9 @@
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
+    "gsap": "^3.15.0",
     "lucide-react": "^1.27.0",
+    "motion": "^14.0.0",
     "react": "^19.2.8",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "^19.2.8",
@@ -52,6 +55,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "autoprefixer": "^10.5.4",
     "postcss": "^8.5.23",
     "tailwindcss": "^3.4.19"
