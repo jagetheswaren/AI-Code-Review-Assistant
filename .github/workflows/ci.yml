@@ -36,6 +36,7 @@ jobs:
           MONGO_URI: mongodb://localhost:27017/test_code_review
           JWT_SECRET: test-secret-key-12345
           GROQ_API_KEY: mock_test_key
+          GITHUB_WEBHOOK_SECRET: ci-test-webhook-secret-12345
 
   frontend:
     name: Frontend test and build
@@ -53,3 +54,5 @@ jobs:
       - run: npm ci
       - run: npm run test:ci
       - run: npm run build
+        env:
+          CI: false
