@@ -1,49 +1,69 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { ArrowLeft, AlertTriangle, Shield, Search, Zap, FileJson, FileSpreadsheet, FileText, Clock, Hash, Bot } from 'lucide-react';
-import { cn } from '../lib/utils';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  ArrowLeft,
+  FileCode2,
+  Clock,
+  Download,
+  ShieldAlert,
+  Sparkles,
+  Zap,
+  Cpu,
+  Copy,
+  Check,
+  ChevronRight,
+  ExternalLink,
+} from 'lucide-react';
 import { getScanDetail, exportJSON, exportCSV, exportPDF } from '../api/client';
-import { Button, Card, CardHeader, CardTitle, Badge, EmptyState, PageLoader } from '../components/ui';
+import { useToast } from '../contexts/ToastContext';
+import { Button, Badge, Skeleton } from '../components/ui';
+import { SpotlightCard, CountUp, StatusMark } from '../components/reactbits/Bits';
+import { cn } from '../lib/utils';
 
 export default function HistoryDetail() {
-  const { id } = useParams();
+  const { scanId } = useParams();
   const navigate = useNavigate();
-  const [detail, setDetail] = useState(null);
+  const { success, error: toastError } = useToast();
+
+  const [scan, setScan] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
-    loadDetail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    if (scanId) {
+      loadScan();
+    }
+  }, [scanId]);
 
-  async function loadDetail() {
+  async function loadScan() {
     setLoading(true);
     try {
-      const res = await getScanDetail(id);
-      const data = res.data || res;
-      setDetail(data);
+      const res = await getScanDetail(scanId);
+      setScan(res.data || res);
     } catch {
-      setDetail(null);
+      toastError('Failed to load scan report');
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleExport(type) {
+  async function handleExport(format) {
+    setDownloading(true);
     try {
       let res;
-      let filename = `report-${String(id).slice(0,8)}`;
-      if (type === 'json') {
-        res = await exportJSON(id);
+      let filename = `intellireview-${String(scanId).slice(0, 8)}`;
+      if (format === 'json') {
+        res = await exportJSON(scanId);
         filename += '.json';
-      } else if (type === 'csv') {
-        res = await exportCSV(id);
+      } else if (format === 'csv') {
+        res = await exportCSV(scanId);
         filename += '.csv';
       } else {
-        res = await exportPDF(id);
+        res = await exportPDF(scanId);
         filename += '.pdf';
       }
+
       const blob = res.data || res;
       const url = URL.createObjectURL(blob instanceof Blob ? blob : new Blob([blob]));
       const a = document.createElement('a');
@@ -53,165 +73,200 @@ export default function HistoryDetail() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {}
+      success(`Exported ${format.toUpperCase()} report`);
+    } catch {
+      toastError(`Failed to export ${format.toUpperCase()}`);
+    } finally {
+      setDownloading(false);
+    }
   }
 
-  function severityColor(sev) {
-    if (sev === 'high' || sev === 'critical') return 'bg-red-500/10 text-red-400 border-red-500/20';
-    if (sev === 'medium') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-    return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-32 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    );
   }
 
-  if (loading) return <PageLoader />;
-  if (!detail) return <EmptyState icon={AlertTriangle} title="Report not found" description="This scan report could not be loaded." />;
-
-  const summary = detail.summary || {};
-  const totalIssues = summary.total_issues || 0;
-  const securityCount = summary.by_type?.security || 0;
-  const codeSmellCount = summary.by_type?.code_smell || 0;
-  const performanceCount = summary.by_type?.performance || 0;
-
-  // Group file_analyses into issues_by_file
-  const issuesByFile = {};
-  if (detail.file_analyses) {
-    detail.file_analyses.forEach(fa => {
-      issuesByFile[fa.file_path] = fa.issues;
-    });
+  if (!scan) {
+    return (
+      <div className="p-12 text-center text-xs font-mono text-content-muted space-y-4">
+        <p>Report not found or access denied.</p>
+        <Link to="/history">
+          <Button variant="secondary" size="sm" className="font-mono text-xs">
+            Back to History
+          </Button>
+        </Link>
+      </div>
+    );
   }
+
+  const summary = scan.summary || {};
+  const issues = (scan.file_analyses || []).flatMap((fa) => fa.issues || []);
+  const overallRisk = (summary.overall_risk || 'low').toLowerCase();
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white" onClick={() => navigate(-1)}>
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back
-          </Button>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Clock className="w-5 h-5 text-slate-400" />
-            Analysis Report
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="border-white/[0.06] text-slate-400 hover:text-white" onClick={() => handleExport('json')}>
-            <FileJson className="w-4 h-4 mr-1.5" />
-            JSON
-          </Button>
-          <Button variant="outline" size="sm" className="border-white/[0.06] text-slate-400 hover:text-white" onClick={() => handleExport('csv')}>
-            <FileSpreadsheet className="w-4 h-4 mr-1.5" />
-            CSV
-          </Button>
-          <Button variant="outline" size="sm" className="border-white/[0.06] text-slate-400 hover:text-white" onClick={() => handleExport('pdf')}>
-            <FileText className="w-4 h-4 mr-1.5" />
-            PDF
-          </Button>
-        </div>
+    <div className="space-y-6 select-none">
+      {/* Top Breadcrumb */}
+      <div className="flex items-center gap-2 text-xs font-mono text-content-subtle">
+        <Link to="/history" className="flex items-center gap-1 hover:text-content text-primary">
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to History
+        </Link>
+        <span>/</span>
+        <span>Scan {String(scanId).slice(0, 8)}</span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-[#111827] border-white/[0.06] p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-white/[0.05]">
-              <AlertTriangle className="w-5 h-5 text-slate-400" />
+      {/* Report Summary Card */}
+      <SpotlightCard className="p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="font-display text-xl font-bold text-content tracking-tight">
+                {summary.file_path || 'Code Review Report'}
+              </h1>
+              <Badge
+                variant={
+                  overallRisk === 'critical'
+                    ? 'critical'
+                    : overallRisk === 'high'
+                    ? 'high'
+                    : overallRisk === 'medium'
+                    ? 'medium'
+                    : 'low'
+                }
+              >
+                {overallRisk.toUpperCase()} RISK
+              </Badge>
+              <span className="text-xs font-mono text-content-subtle">
+                ID: {String(scanId).slice(0, 10)}
+              </span>
             </div>
-            <div>
-              <p className="text-sm text-slate-400">Total Issues</p>
-              <p className="text-2xl font-bold text-white">{totalIssues}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="bg-[#111827] border-white/[0.06] p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-500/10">
-              <Shield className="w-5 h-5 text-red-400" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-400">Security</p>
-              <p className="text-2xl font-bold text-white">{securityCount}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="bg-[#111827] border-white/[0.06] p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-500/10">
-              <Search className="w-5 h-5 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-400">Code Smells</p>
-              <p className="text-2xl font-bold text-white">{codeSmellCount}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="bg-[#111827] border-white/[0.06] p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-purple-500/10">
-              <Zap className="w-5 h-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-sm text-slate-400">Performance</p>
-              <p className="text-2xl font-bold text-white">{performanceCount}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
 
-      <div className="space-y-6">
-        {Object.entries(issuesByFile).map(([filename, fileIssues]) => (
-          <Card key={filename} className="bg-[#111827] border-white/[0.06]">
-            <CardHeader>
-              <CardTitle className="text-white text-base">{filename}</CardTitle>
-            </CardHeader>
-            <div className="px-6 pb-6 space-y-4">
-              {fileIssues.map((issue, idx) => (
-                <div key={idx} className="p-4 rounded-lg bg-white/[0.02] border border-white/[0.04] space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className={cn('border text-xs', severityColor(issue.severity))}>
-                      {issue.severity}
-                    </Badge>
-                    <span className="flex items-center gap-1 text-xs text-slate-500">
-                      <Hash className="w-3 h-3" />
-                      Line {issue.line_number}
-                    </span>
-                    <Badge variant="outline" className="border-white/[0.06] text-xs text-slate-400">
-                      {issue.type || issue.category}
-                    </Badge>
-                    {issue.source && issue.source.length > 0 && (
-                      <div className="flex gap-1 ml-auto">
-                        {issue.source.map((src, i) => (
-                          <Badge key={i} className="text-[10px] uppercase bg-white/5 text-slate-400 border-white/10">
-                            {src}
-                          </Badge>
-                        ))}
-                      </div>
+            <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-content-subtle">
+              <span className="flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                {scan.timestamp ? new Date(scan.timestamp).toLocaleString() : 'Recent'}
+              </span>
+              <span>•</span>
+              <span>Total Issues: <strong className="text-content">{issues.length}</strong></span>
+              {scan.processing_time_ms && (
+                <>
+                  <span>•</span>
+                  <span>Execution: <strong className="text-primary">{scan.processing_time_ms}ms</strong></span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Export Dropdown / Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={downloading}
+              onClick={() => handleExport('pdf')}
+              className="font-mono text-xs"
+            >
+              <Download className="w-3.5 h-3.5 mr-1" /> PDF
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={downloading}
+              onClick={() => handleExport('csv')}
+              className="font-mono text-xs"
+            >
+              CSV
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={downloading}
+              onClick={() => handleExport('json')}
+              className="font-mono text-xs"
+            >
+              JSON
+            </Button>
+          </div>
+        </div>
+      </SpotlightCard>
+
+      {/* AI Review Summary Block */}
+      {scan.ai_review && (
+        <SpotlightCard className="p-6 space-y-2.5 border-primary/20 bg-primary/[0.02]">
+          <div className="flex items-center gap-2 text-primary text-xs font-mono font-semibold">
+            <Cpu className="w-4 h-4" />
+            <span>AI Reasoning & Executive Synthesis</span>
+          </div>
+          <p className="text-xs font-mono text-content-muted leading-relaxed whitespace-pre-wrap">
+            {scan.ai_review}
+          </p>
+        </SpotlightCard>
+      )}
+
+      {/* Findings Table */}
+      <SpotlightCard className="p-6">
+        <h2 className="font-display text-base font-semibold text-content mb-4">
+          All Detected Findings ({issues.length})
+        </h2>
+
+        {issues.length === 0 ? (
+          <div className="py-12 text-center text-xs font-mono text-content-muted">
+            Zero findings recorded for this scan.
+          </div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {issues.map((iss, idx) => {
+              const sev = (iss.severity || 'low').toLowerCase();
+              return (
+                <div key={idx} className="py-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          sev === 'critical' ? 'critical' : sev === 'high' ? 'high' : 'medium'
+                        }
+                      >
+                        {sev.toUpperCase()}
+                      </Badge>
+                      <span className="text-xs font-mono font-bold text-content">
+                        Line {iss.line_number || 'N/A'}
+                      </span>
+                      <span className="text-xs font-mono text-content-subtle">
+                        [{iss.rule_id || 'RULE'}]
+                      </span>
+                    </div>
+                    {iss.source && (
+                      <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-white/[0.04] text-content-subtle">
+                        Source: {iss.source}
+                      </span>
                     )}
                   </div>
-                  <p className="text-sm text-white">{issue.message}</p>
-                  {issue.suggestion && (
-                    <p className="text-sm text-slate-400">Suggestion: {issue.suggestion}</p>
+
+                  <p className="text-xs font-medium text-content leading-relaxed">
+                    {iss.message}
+                  </p>
+
+                  {iss.explanation && (
+                    <p className="text-xs font-mono text-content-muted leading-relaxed">
+                      {iss.explanation}
+                    </p>
                   )}
-                  {issue.explanation && (
-                    <p className="text-xs text-slate-500">{issue.explanation}</p>
+
+                  {iss.suggested_fix && (
+                    <div className="p-3 rounded-lg bg-[#070A0F] border border-white/[0.06] font-mono text-xs text-success/90">
+                      <code>{iss.suggested_fix}</code>
+                    </div>
                   )}
                 </div>
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {detail.ai_review && (
-        <Card className="bg-gradient-to-br from-blue-500/10 via-purple-500/5 to-transparent border-blue-500/20">
-          <div className="p-6 flex gap-4">
-            <div className="p-2 rounded-lg bg-blue-500/10 h-fit">
-              <Bot className="w-5 h-5 text-blue-400" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-white mb-2">AI Review</h3>
-              <p className="text-sm text-slate-300 whitespace-pre-wrap">{detail.ai_review}</p>
-            </div>
+              );
+            })}
           </div>
-        </Card>
-      )}
-    </motion.div>
+        )}
+      </SpotlightCard>
+    </div>
   );
 }

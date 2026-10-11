@@ -33,14 +33,22 @@ def init_mongo(
     db.users.create_index("email", unique=True)
     db.users.create_index("username", unique=True)
     db.users.create_index("github_id", unique=True, sparse=True)
+    db.users.create_index("github_username", sparse=True)
+    db.users.create_index("github_token", sparse=True)
+    
     db.scans.create_index([("user_id", ASCENDING), ("timestamp", DESCENDING)])
     db.scans.create_index("request_id", unique=True)
+    
     db.repositories.create_index([("user_id", ASCENDING), ("github_id", ASCENDING)], unique=True)
-    db.repositories.create_index("user_id")
+    db.repositories.create_index([("user_id", ASCENDING), ("connected_at", DESCENDING)])
+    
     db.pull_requests.create_index([("repository_id", ASCENDING), ("number", ASCENDING)])
-    db.pull_requests.create_index("user_id")
+    db.pull_requests.create_index([("repository_id", ASCENDING), ("created_at", DESCENDING)])
+    db.pull_requests.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
+    
     db.notifications.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
     db.notifications.create_index([("user_id", ASCENDING), ("read", ASCENDING)])
+    
     db.user_settings.create_index("user_id", unique=True)
     return db
 
@@ -132,11 +140,20 @@ class ScanService:
 
     def get_scan_by_id(self, scan_id: str) -> Optional[ScanRecord]:
         doc = self.collection.find_one({"_id": _object_id(scan_id)})
+        if not doc and isinstance(scan_id, str):
+            doc = self.collection.find_one({"request_id": scan_id})
         return ScanRecord(**doc) if doc else None
 
     def get_scan_by_request_id(self, request_id: str) -> Optional[ScanRecord]:
         doc = self.collection.find_one({"request_id": request_id})
         return ScanRecord(**doc) if doc else None
+
+    def claim_scan(self, request_id: str, user_id: str) -> bool:
+        res = self.collection.update_one(
+            {"request_id": request_id, "$or": [{"user_id": None}, {"user_id": {"$exists": False}}]},
+            {"$set": {"user_id": _object_id(user_id)}}
+        )
+        return res.modified_count > 0
 
     def get_user_scan_stats(self, user_id: str) -> Dict[str, Any]:
         scans = self.get_user_scans(user_id, limit=0)

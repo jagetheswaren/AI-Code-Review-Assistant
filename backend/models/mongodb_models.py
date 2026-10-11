@@ -76,6 +76,7 @@ class AnalysisSummary(BaseModel):
     by_type: Dict[str, int] = {}
     by_severity: Dict[str, int] = {}
     overall_risk: str = "none"
+    health_score: int = 100
     file_path: str = ""
 
 
@@ -120,6 +121,7 @@ class User(BaseModel):
     github_id: Optional[int] = None
     github_username: Optional[str] = None
     github_token: Optional[str] = None
+    github_auth_method: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
     is_active: bool = True

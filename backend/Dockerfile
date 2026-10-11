@@ -9,9 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Create a virtual environment and install dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=100 -r requirements.txt
 
 # Production stage
 FROM python:3.11-slim
@@ -23,11 +26,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
+# Copy the virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
 
-# Make sure scripts in .local are usable
-ENV PATH=/root/.local/bin:$PATH
+# Make sure scripts in venv are usable
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app

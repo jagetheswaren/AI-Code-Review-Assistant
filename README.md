@@ -2,463 +2,325 @@
 
 <img src="logo.svg" alt="IntelliReview AI Logo" width="120" />
 
-# IntelliReview AI
+# IntelliReview AI V2
 
-**AI-Powered Code Review Assistant**
+**AI-Powered Intelligent Code Review & Secure Pull Request Analysis Platform**
 
 [![CI](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/jagetheswaren/AI-Code-Review-Assistant/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://python.org)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![React 19](https://img.shields.io/badge/react-19-61dafb.svg)](https://reactjs.org)
-[![MongoDB](https://img.shields.io/badge/mongodb-7-green.svg)](https://mongodb.com)
-[![Vercel](https://img.shields.io/badge/deployed%20on-Vercel-black?logo=vercel)](https://frontend-delta-eight-92.vercel.app)
-[![Render](https://img.shields.io/badge/deployed%20on-Render-blue?logo=render)](https://ai-code-review-api.onrender.com)
+[![MongoDB 7](https://img.shields.io/badge/mongodb-7-green.svg)](https://mongodb.com)
+[![Scikit-Learn](https://img.shields.io/badge/scikit--learn-v3-orange.svg)](https://scikit-learn.org)
+[![Groq API](https://img.shields.io/badge/Groq-Llama%203.3%20%2F%20GPT--OSS-f55036.svg)](https://groq.com)
 
-A full-stack web application that uses **Machine Learning**, **NLP**, and **Static Analysis** to automatically review Python code for security vulnerabilities, code smells, and performance issues.
+A modern full-stack developer intelligence platform combining **Static Code Analysis**, **Machine Learning Severity Classification**, and **Multi-Provider Generative AI** (Groq with Ollama fallback) to audit Python source code and automate GitHub pull request reviews.
 
 </div>
 
 ---
 
-## 🚀 Live Demo & Download
+## 📸 Real Application Tour
 
-### 🌐 Try it instantly in your browser:
-- **Frontend (Live Demo)**: [https://frontend-delta-eight-92.vercel.app](https://frontend-delta-eight-92.vercel.app)
-- **Backend API**: [https://ai-code-review-api.onrender.com](https://ai-code-review-api.onrender.com)
+### 1. Unified Security & Quality Dashboard
+Real-time vulnerability metrics, risk-over-time trends, health scores, and synchronization with your GitHub repositories.
 
-### 💻 Download the Software (Windows):
-Want to run the app completely locally on your own computer? Download the official installer!
+![Dashboard Overview](docs/screenshots/dashboard_screen.png)
 
-**Before downloading, you MUST install these prerequisites on your computer:**
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Required for local MongoDB)
-- [Ollama](https://ollama.com/) (Required for local AI)
+### 2. AI Code Review Workspace
+Monaco code editor with Python syntax highlighting, instant AST scanning, ML severity grading, and one-click remediation patch application.
 
-Once the prerequisites are installed:
-1. Go to the [**Releases Page**](https://github.com/jagetheswaren/AI-Code-Review-Assistant/releases).
-2. Download `IntelliReview-AI-Setup.exe`.
-3. Open the downloaded installer.
-4. Click **Next** -> **Install** -> **Finish**.
-5. IntelliReview AI will create a desktop shortcut.
-6. Double-click the **IntelliReview AI** icon on your desktop to launch the application.
+![AI Code Review Workspace](docs/screenshots/review_screen.png)
 
-> **Note on AI Model**: The first time you launch the app, it will check for the `qwen2.5-coder:7b` model. If you don't have it, it will provide instructions on how to download it via Ollama.
+### 3. Deep Security Posture Center
+Detailed breakdown of CWE classifications, dangerous sink analysis (eval, command injection, weak cryptography, plaintext protocols), and exact code coordinates.
 
----
+![Security Center](docs/screenshots/security_screen.png)
 
-## Features
+### 4. GitHub Integration & Repository Browser
+Connect via Personal Access Token or OAuth to inspect repositories, branches, open PRs, and automatically post line-by-line review comments.
 
-| Feature | Description |
-|---------|-------------|
-| **Security Analysis** | Bandit integration + custom AST analysis for vulnerabilities |
-| **Code Smell Detection** | Pylint-style checks for unused imports, long functions, etc. |
-| **Performance Analysis** | Nested loops, N+1 queries, string concatenation in loops |
-| **ML Severity Prediction** | Random Forest, Gradient Boosting, Logistic Regression models |
-| **NLP Explanations** | CodeBERT-powered issue explanations and fix suggestions |
-| **GitHub Integration** | OAuth, repo browsing, PR analysis, automated review comments |
-| **AI Review** | Ollama LLM-powered code review summaries |
-| **PDF/CSV/JSON Export** | Download analysis reports in multiple formats |
-| **Dark Mode** | Full dark/light theme support |
-| **Responsive Design** | Works on desktop, tablet, and mobile |
+![GitHub Integration](docs/screenshots/github_screen.png)
+
+### 5. Audit History Ledger & Multi-Format Reports
+Complete audit trail for all scanned files and pull requests with compliance export into PDF, CSV, and JSON formats.
+
+![Scan History](docs/screenshots/history_screen.png)
 
 ---
 
-## Architecture
+## 🌟 Core Features & Modules
 
-```mermaid
-graph TB
-    subgraph Frontend["Frontend (React + Tailwind)"]
-        A[Landing Page] --> B[Login/Register]
-        B --> C[Dashboard]
-        C --> D[AI Review]
-        C --> E[GitHub Integration]
-        C --> F[History]
-        C --> G[Settings]
-        D --> H[Analysis Results]
-        E --> I[Repository Browser]
-        I --> J[PR Analysis]
-    end
+- **Instant Code Scanning**: Unauthenticated guest code scanning on `/review` with an account claim workflow (`/api/scan/<id>/claim`) to link scans upon registration.
+- **Static Analysis Engine**:
+  - **Bandit AST**: Detects shell injections, unsafe deserialization (pickle, yaml), dangerous dynamic execution (`eval`, `exec`), and hardcoded secrets.
+  - **Custom Security Rules**: Identifies insecure temporary files (`tempfile.mktemp` / CWE-377), weak hashes (`hashlib.md5`, `hashlib.sha1` / CWE-328), and plaintext protocols (`telnetlib`, `ftplib`).
+  - **Smell & Quality (Pylint / Astroid)**: Unused imports, missing docstrings, bad naming conventions, low comment density.
+  - **Complexity Diagnostics (Radon)**: Cyclomatic Complexity (CC) grading, Maintainability Index (MI), and Halstead metrics.
+- **Finding Aggregator & Unification**: Intelligently groups findings on identical lines and preserves evidence across all analysis sources (`ast`, `radon`, `pylint`, `ml`, `ai`).
+- **Machine Learning Severity Classifier (v3)**:
+  - Scikit-learn Random Forest model trained on leakage-free v2 feature vectors (`has_fix_suggestion`, normalized metrics).
+  - Predicts confidence scores and calibrated severity labels (`critical`, `high`, `medium`, `low`, `info`).
+- **Multi-Provider AI Fallback Engine**:
+  - Primary: Ultra-fast **Groq API** (`openai/gpt-oss-120b` or Llama 3.3).
+  - Local Fallback: **Ollama** (`qwen2.5-coder:7b`).
+  - Offline Safety Net: Automated static rule-based review so scans never fail even without an active internet connection.
+- **GitHub Automation**:
+  - Personal Access Token (PAT) and OAuth 2.0 connection.
+  - Webhook listener with HMAC-SHA256 signature verification (`X-Hub-Signature-256`) and idempotency deduplication.
+  - Automated PR line-by-line comments.
+- **Multi-Format Export Center**:
+  - Audit Certificate PDF generation via ReportLab with formatted issue tables and executive summaries.
+  - Structured CSV spreadsheet export.
+  - Full telemetry JSON export.
 
-    subgraph Backend["Backend (Flask + Python)"]
-        K[Auth API] --> L[Review API]
-        M[GitHub API] --> L
-        N[Notification API] --> L
-        O[Settings API] --> L
-        P[Export API] --> L
-        L --> Q[Security Analyzer]
-        L --> R[Smell Analyzer]
-        L --> S[Complexity Analyzer]
-        L --> T[Performance Analyzer]
-        L --> U[AI Reviewer]
-        L --> V[ML Classifier]
-        L --> W[NLP Explainer]
-    end
+---
 
-    subgraph Database["Database (MongoDB)"]
-        X[(Users)]
-        Y[(Scans)]
-        Z[(Repositories)]
-        AA[(Pull Requests)]
-        AB[(Notifications)]
-        AC[(Settings)]
-    end
+## 🛠️ Technology Stack
 
-    subgraph External["External Services"]
-        AD[GitHub API]
-        AE[Ollama LLM]
-        AF[CodeBERT]
-        AG[ML Models]
-    end
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend** | React 19, Tailwind CSS, Monaco Editor (`@monaco-editor/react`), Framer Motion, Chart.js, Lucide Icons, Axios |
+| **Backend** | Python 3.11 / 3.14, Flask 3.1, Werkzeug ProxyFix, Pydantic v2 Settings, Gunicorn |
+| **Database** | MongoDB 7+ (PyMongo, MongoMock for isolated testing) |
+| **Static Analyzers** | Bandit, Radon, Pylint, Astroid, AST parser |
+| **Machine Learning** | Scikit-learn (RandomForestClassifier v3), NumPy, Joblib |
+| **AI Providers** | Groq SDK (Python), Ollama Client |
+| **Reporting** | ReportLab 5 (PDF generation), CSV, JSON |
+| **Testing** | Pytest, Pytest-Mock, Pytest-Asyncio, Jest, Playwright E2E |
 
-    Frontend --> Backend
-    Backend --> Database
-    Backend --> External
+---
+
+## 📐 Project Architecture
+
+```
+                       ┌────────────────────────────────────────────────────────┐
+                       │               React 19 Frontend (SPA)                  │
+                       │   Dashboard • Monaco Review • GitHub • Reports • Auth  │
+                       └───────────────────────────┬────────────────────────────┘
+                                                   │ Axios (JWT / Bearer Token)
+                                                   ▼
+                       ┌────────────────────────────────────────────────────────┐
+                       │               Flask 3 REST API Server                  │
+                       │   Review API • GitHub API • Auth API • Export API      │
+                       └──────┬────────────────────┬────────────────────┬───────┘
+                              │                    │                    │
+              ┌───────────────▼────────┐   ┌───────▼──────────┐   ┌─────▼──────────────┐
+              │ Static Analysis Engine │   │ ML Classifier v3 │   │ AI Reviewer Engine │
+              │ • Bandit (AST Security)│   │ • Random Forest  │   │ • Groq (Primary)   │
+              │ • Radon (Complexity)   │   │ • Leakage-Free   │   │ • Ollama (Local)   │
+              │ • Smell Analyzer       │   │   Feature Map    │   │ • Rule Fallback    │
+              └───────────────┬────────┘   └───────┬──────────┘   └─────┬──────────────┘
+                              │                    │                    │
+                              └────────────────────┼────────────────────┘
+                                                   │
+                                                   ▼
+                                     ┌───────────────────────────┐
+                                     │ Finding Aggregator Engine │
+                                     └─────────────┬─────────────┘
+                                                   │
+                                                   ▼
+                                     ┌───────────────────────────┐
+                                     │     MongoDB Database      │
+                                     │ Scans • Users • Repos • PR│
+                                     └───────────────────────────┘
 ```
 
 ---
 
-## ER Diagram
+## 💻 Windows Local Setup & Quickstart
 
-```mermaid
-erDiagram
-    USERS {
-        ObjectId _id PK
-        string username UK
-        string email UK
-        string password_hash
-        string full_name
-        string avatar_url
-        int github_id
-        string github_username
-        string github_token
-        datetime created_at
-        datetime last_login
-        bool is_active
-    }
-
-    SCANS {
-        ObjectId _id PK
-        ObjectId user_id FK
-        string request_id UK
-        datetime timestamp
-        array file_analyses
-        object summary
-        string ai_review
-        string github_pr_url
-        int github_pr_number
-        string github_repo
-        int processing_time_ms
-    }
-
-    REPOSITORIES {
-        ObjectId _id PK
-        ObjectId user_id FK
-        int github_id UK
-        string name
-        string full_name
-        string description
-        string language
-        string default_branch
-        bool is_private
-        int stars
-        int forks
-        int webhook_id
-        datetime connected_at
-        datetime last_analyzed
-    }
-
-    PULL_REQUESTS {
-        ObjectId _id PK
-        ObjectId user_id FK
-        ObjectId repository_id FK
-        int github_pr_id
-        int number
-        string title
-        string body
-        string author
-        string head_sha
-        string head_branch
-        string base_branch
-        string state
-        int changed_files
-        int additions
-        int deletions
-        string analysis_status
-        datetime created_at
-        datetime analyzed_at
-    }
-
-    NOTIFICATIONS {
-        ObjectId _id PK
-        ObjectId user_id FK
-        string title
-        string message
-        string type
-        bool read
-        string link
-        datetime created_at
-    }
-
-    USER_SETTINGS {
-        ObjectId _id PK
-        ObjectId user_id FK
-        string theme
-        bool notifications_enabled
-        bool email_notifications
-        bool auto_analyze_webhook
-        string default_language
-        string analysis_depth
-        datetime updated_at
-    }
-
-    USERS ||--o{ SCANS : "creates"
-    USERS ||--o{ REPOSITORIES : "connects"
-    USERS ||--o{ PULL_REQUESTS : "analyzes"
-    USERS ||--o{ NOTIFICATIONS : "receives"
-    USERS ||--o| USER_SETTINGS : "has"
-    REPOSITORIES ||--o{ PULL_REQUESTS : "contains"
-```
-
----
-
-## Sequence Diagram - Analysis Flow
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant Frontend
-    participant Backend
-    participant Analyzers
-    participant ML
-    participant NLP
-    participant MongoDB
-
-    User->>Frontend: Paste code / Upload file
-    Frontend->>Backend: POST /api/analyze
-    Backend->>Analyzers: Security analysis (Bandit + AST)
-    Analyzers-->>Backend: Security issues
-    Backend->>Analyzers: Code smell analysis
-    Analyzers-->>Backend: Smell issues
-    Backend->>Analyzers: Complexity analysis (Radon)
-    Analyzers-->>Backend: Complexity issues
-    Backend->>Analyzers: Performance analysis
-    Analyzers-->>Backend: Performance issues
-    Backend->>ML: Predict severity
-    ML-->>Backend: ML predictions
-    Backend->>NLP: Generate explanations
-    NLP-->>Backend: Explanations + fixes
-    Backend->>Backend: Aggregate & deduplicate
-    Backend->>MongoDB: Save scan record
-    Backend-->>Frontend: ReviewResponse
-    Frontend-->>User: Display results
-```
-
----
-
-## User Journey
-
-```mermaid
-flowchart TD
-    A[Open Website] --> B{Have Account?}
-    B -->|No| C[Register]
-    B -->|Yes| D[Login]
-    C --> E[Dashboard]
-    D --> E
-    E --> F[Connect GitHub]
-    F --> G[Browse Repositories]
-    G --> H[Select Repository]
-    H --> I[Choose Pull Request]
-    I --> J[Click Analyze]
-    J --> K[AI Analysis Running]
-    K --> L[View Report]
-    L --> M{Issues Found?}
-    M -->|Yes| N[View Issue Details]
-    N --> O[Apply Fixes]
-    O --> P[Export Report]
-    M -->|No| Q[Code Looks Good!]
-    P --> R[Merge PR]
-    Q --> R
-```
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Frontend** | React 19, Tailwind CSS 4, Chart.js, Axios |
-| **Backend** | Python Flask, Pydantic, Flask-CORS |
-| **Database** | MongoDB (Atlas in prod, local in dev) |
-| **ML** | Scikit-learn (RF, GB, LR), Joblib |
-| **NLP** | CodeBERT / CodeT5 (HuggingFace Transformers) |
-| **Static Analysis** | Bandit, Pylint, Radon, Custom AST |
-| **AI Review** | Ollama (qwen2.5-coder) |
-| **Auth** | JWT (PyJWT), bcrypt |
-| **Hosting** | Vercel (frontend), Render (backend) |
-| **CI/CD** | GitHub Actions |
-
----
-
-## Project Structure
-
-```
-AI-Code-Review-Assistant/
-├── backend/
-│   ├── api/                    # Flask blueprints (routes)
-│   │   ├── auth_routes.py      # Register, Login, Me
-│   │   ├── review_routes.py    # Analyze, Webhook, History
-│   │   ├── github_routes.py    # OAuth, Repos, PRs
-│   │   ├── notification_routes.py
-│   │   ├── settings_routes.py
-│   │   ├── profile_routes.py
-│   │   └── export_routes.py    # PDF, CSV, JSON export
-│   ├── analyzers/              # Static analysis engines
-│   │   ├── security_analyzer.py
-│   │   ├── smell_analyzer.py
-│   │   ├── complexity_analyzer.py
-│   │   └── performance_analyzer.py
-│   ├── reviewer/               # AI review + aggregation
-│   ├── services/               # GitHub client
-│   ├── database/               # MongoDB services
-│   ├── middleware/              # Rate limiting, security headers
-│   ├── models/                 # Pydantic models
-│   ├── auth/                   # JWT helpers
-│   ├── tests/                  # pytest test suite
-│   ├── app.py                  # Flask app factory
-│   ├── config.py               # Settings (pydantic-settings)
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── api/                # Axios client
-│   │   ├── components/         # Layout, UI components
-│   │   ├── contexts/           # Auth, Theme, Toast
-│   │   ├── pages/              # 12 pages
-│   │   └── App.jsx
-│   └── package.json
-├── ml/
-│   ├── severity_classifier.py  # ML model
-│   ├── nlp_explainer.py        # NLP explanations
-│   └── train_ml_models.py      # Training script
-├── docker-compose.yml
-├── render.yaml
-└── .github/workflows/ci.yml
-```
-
----
-
-## Getting Started
+This application is designed for local development on Windows.
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- MongoDB (local or Atlas)
-- (Optional) Ollama for AI reviews
+1. **Python 3.11+** installed and added to your `PATH`.
+2. **Node.js 18+ / 22+** and `npm`.
+3. **MongoDB Community Server** (or Docker MongoDB container) running locally on port `27017`.
+4. *(Optional for Cloud AI)*: Free Groq API Key from [console.groq.com](https://console.groq.com/keys).
+5. *(Optional for Local AI)*: [Ollama](https://ollama.com/) with `ollama run qwen2.5-coder:7b`.
 
-### Backend Setup
+---
 
-```bash
+### Step 1: Clone and Configure Environment
+
+```powershell
+# Clone the repository
+git clone https://github.com/jagetheswaren/AI-Code-Review-Assistant.git
+cd AI-Code-Review-Assistant
+
+# Configure root .env
+Copy-Item .env.example .env
+
+# Configure backend .env
+Copy-Item backend\.env.example backend\.env
+```
+
+Open `backend\.env` and configure your settings:
+
+```ini
+FLASK_ENV=development
+FLASK_PORT=5000
+CORS_ORIGINS=http://localhost:3000,http://localhost:80
+
+# Local MongoDB
+MONGO_URI=mongodb://localhost:27017/code_review_assistant
+
+# JWT Secret
+JWT_SECRET=dev-super-secret-jwt-key-change-in-production
+
+# Groq AI (Recommended for high speed)
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=openai/gpt-oss-120b
+
+# Ollama Fallback (Optional)
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5-coder:7b
+
+# GitHub Personal Access Token
+GITHUB_TOKEN=your_personal_access_token
+```
+
+---
+
+### Step 2: Start Local MongoDB
+
+If you have MongoDB installed as a Windows service:
+```powershell
+# Verify MongoDB is running on port 27017
+Test-NetConnection -ComputerName 127.0.0.1 -Port 27017
+```
+
+Or using Docker:
+```powershell
+docker run -d -p 27017:27017 --name intellireview-mongo mongo:7
+```
+
+---
+
+### Step 3: Setup & Launch Backend
+
+```powershell
 cd backend
+
+# Create and activate virtual environment
 python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Mac/Linux
+.\venv\Scripts\Activate.ps1
+
+# Install dependencies
 pip install -r requirements.txt
-python -m ml.train_ml_models
+
+# Start Flask server
 python app.py
 ```
 
-### Frontend Setup
+The backend starts at `http://127.0.0.1:5000`. You can verify health:
+```powershell
+curl http://127.0.0.1:5000/health
+curl http://127.0.0.1:5000/ready
+```
 
-```bash
+---
+
+### Step 4: Setup & Launch Frontend
+
+Open a new PowerShell terminal:
+
+```powershell
 cd frontend
+
+# Install Node dependencies
 npm install
+
+# Start React development server
 npm start
 ```
 
-### Docker Setup
+The frontend will open at `http://localhost:3000`.
 
-```bash
-docker-compose up -d
+---
+
+## 🧪 Testing Commands & Verified Results
+
+IntelliReview AI maintains an extensive automated test suite covering unit, integration, and browser end-to-end flows.
+
+### 1. Backend Pytest Suite
+```powershell
+cd backend
+.\venv\Scripts\python.exe -m pytest tests/ -v
+```
+**Verified Results:**
+- **102 passed, 1 skipped** (103 total) in 60s.
+- Validates static analyzers, AST rules, ML v3 pipeline, Groq AI connectivity, JWT auth, guest scan claiming, and GitHub webhook HMAC verification.
+
+### 2. Frontend Jest Suite
+```powershell
+cd frontend
+npm run test:ci
+```
+**Verified Results:**
+- **5 passed, 5 total** in 35s.
+
+### 3. Playwright Browser E2E Suite
+```powershell
+cd frontend
+npx playwright test
+```
+**Verified Results:**
+- **11 passed across 3 viewports** (Mobile 360x800, Tablet 768x1024, Desktop 1440x900) in 31.5s.
+- Tests navigation, authentication validation, instant review submission, and scan history.
+
+---
+
+## 📁 Repository Structure
+
+```
+AI-Code-Review-Assistant/
+├── .github/
+│   └── workflows/ci.yml         # CI workflow for linting and tests
+├── backend/
+│   ├── analyzers/               # Static analyzers (Security, Smell, Radon, Perf)
+│   ├── api/                     # REST route blueprints (auth, review, github, export)
+│   ├── auth/                    # JWT authentication & password hashing
+│   ├── database/                # MongoDB models & PyMongo services
+│   ├── ml/                      # Random Forest classifier v3 & trained model
+│   ├── models/                  # Pydantic data schemas
+│   ├── reviewer/                # FindingAggregator & multi-tier AIReviewer
+│   ├── services/                # AnalysisService, GitHubClient, ScanService
+│   ├── tests/                   # 103 Pytest unit and integration tests
+│   ├── app.py                   # Application entry point
+│   ├── config.py                # Environment configuration
+│   └── requirements.txt         # Backend Python dependencies
+├── docs/
+│   ├── screenshots/             # Live application screenshots
+│   ├── ARCHITECTURE.md          # Full architectural breakdown
+│   ├── SECURITY.md              # Threat model & security policy
+│   └── TESTING.md               # Complete test documentation
+├── frontend/
+│   ├── public/                  # HTML entry point and icons
+│   ├── src/
+│   │   ├── api/client.js        # Axios client with interceptors
+│   │   ├── components/          # Reusable UI controls, Monaco, layout
+│   │   ├── contexts/            # AuthContext, ToastContext
+│   │   ├── pages/               # Dashboard, Review, Security, GitHub, History, etc.
+│   │   └── App.jsx              # Client routing
+│   ├── tests/e2e/               # Playwright end-to-end test specs
+│   └── package.json             # Frontend React dependencies
+├── .env.example                 # Root environment template
+└── README.md                    # Project documentation
 ```
 
 ---
 
-## API Endpoints
+## 🔮 Roadmap & Future Enhancements
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/register` | Register new user |
-| POST | `/api/login` | Login |
-| GET | `/api/me` | Get current user |
-| POST | `/api/analyze` | Analyze code |
-| POST | `/api/analyze/file` | Upload & analyze file |
-| GET | `/api/history` | Scan history |
-| GET | `/api/history/:id` | Scan detail |
-| GET | `/api/dashboard` | Dashboard data |
-| GET | `/api/statistics` | User statistics |
-| GET | `/api/trends` | Issue trends |
-| GET | `/api/github/status` | GitHub connection status |
-| GET | `/api/github/repos` | List GitHub repos |
-| GET | `/api/github/repos/:repo/branches` | List branches |
-| GET | `/api/github/repos/:repo/pull-requests` | List PRs |
-| POST | `/api/github/repos/:repo/pull-requests/:pr/analyze` | Analyze PR |
-| GET | `/api/notifications` | Get notifications |
-| PUT | `/api/notifications/:id/read` | Mark read |
-| GET | `/api/settings` | Get settings |
-| PUT | `/api/settings` | Update settings |
-| GET | `/api/profile` | Get profile |
-| PUT | `/api/profile` | Update profile |
-| PUT | `/api/profile/password` | Change password |
-| DELETE | `/api/account` | Delete account |
-| GET | `/api/export/json/:scanId` | Export JSON |
-| GET | `/api/export/csv/:scanId` | Export CSV |
-| GET | `/api/export/pdf/:scanId` | Export PDF |
+- [ ] Support for TypeScript, JavaScript, and Go static analysis.
+- [ ] Self-hosted GitLab and Bitbucket pull request integrations.
+- [ ] IDE Extension (VS Code & JetBrains plugin) for in-editor real-time scanning.
+- [ ] Automated Git pre-commit hooks for local developer workstations.
 
 ---
 
-## ML Model Comparison
+## 📄 License
 
-| Model | Accuracy | Precision | Recall | F1 Score |
-|-------|----------|-----------|--------|----------|
-| Random Forest | 87% | 85% | 88% | 86% |
-| **Gradient Boosting** | **91%** | **90%** | **89%** | **90%** |
-| Logistic Regression | 82% | 81% | 83% | 82% |
-
----
-
-## Deployment
-
-### Frontend (Vercel)
-1. Push to GitHub
-2. Import repo on [Vercel](https://vercel.com)
-3. Set environment variable: `REACT_APP_API_URL=https://your-backend.onrender.com/api`
-4. Deploy
-
-### Backend (Render)
-1. Create a [Web Service](https://render.com) on Render
-2. Connect your GitHub repo
-3. Set environment variables (see `.env.production.example`)
-4. Deploy
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-**Built as a Capstone Project** | [![GitHub](https://img.shields.io/badge/GitHub-jagetheswaren-181717?style=flat&logo=github)](https://github.com/jagetheswaren)
-
-</div>
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

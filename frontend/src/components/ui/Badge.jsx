@@ -1,32 +1,30 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
 
-const variants = {
-  default: 'bg-white/10 text-slate-300 border-white/[0.06]',
-  primary: 'bg-[#2563EB]/10 text-[#60A5FA] border-[#2563EB]/20',
-  success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  danger: 'bg-red-500/10 text-red-400 border-red-500/20',
-  purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-};
+export function Badge({ className, variant = 'default', children, ...props }) {
+  const variants = {
+    default: 'bg-white/[0.04] text-content border border-white/[0.08]',
+    critical: 'bg-danger/10 text-danger border border-danger/25 shadow-[0_0_10px_rgba(255,93,103,0.15)]',
+    high: 'bg-high/10 text-[#FF944D] border border-[#FF944D]/25',
+    medium: 'bg-medium/10 text-warning border border-warning/25',
+    low: 'bg-low/10 text-primary border border-primary/25',
+    success: 'bg-success/10 text-success border border-success/25',
+    info: 'bg-primary/10 text-primary border border-primary/25',
+    cyan: 'bg-primary/10 text-primary border border-primary/25',
+    violet: 'bg-secondary/10 text-secondary border border-secondary/25',
+    outline: 'text-content border border-white/[0.12] bg-transparent',
+  };
 
-export const Badge = ({ variant = 'default', className, children, dot, ...props }) => (
-  <span
-    className={cn(
-      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border',
-      variants[variant],
-      className
-    )}
-    {...props}
-  >
-    {dot && <span className={cn('w-1.5 h-1.5 rounded-full', {
-      'bg-emerald-400': variant === 'success',
-      'bg-amber-400': variant === 'warning',
-      'bg-red-400': variant === 'danger',
-      'bg-[#60A5FA]': variant === 'primary',
-      'bg-purple-400': variant === 'purple',
-      'bg-slate-400': variant === 'default',
-    })} />}
-    {children}
-  </span>
-);
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-mono font-medium tracking-wide transition-colors",
+        variants[variant],
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}

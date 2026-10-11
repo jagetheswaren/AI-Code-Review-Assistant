@@ -1,61 +1,80 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 import { cn } from '../../lib/utils';
 
-export const Input = React.forwardRef(({ label, error, icon: Icon, className, ...props }, ref) => (
-  <div className="space-y-1.5">
-    {label && <label className="block text-sm font-medium text-slate-300">{label}</label>}
-    <div className="relative">
-      {Icon && <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />}
+export const Input = forwardRef(({ className, type, error, icon: Icon, ...props }, ref) => {
+  return (
+    <div className="relative w-full">
+      {Icon && (
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-content-subtle">
+          <Icon className="h-4 w-4" />
+        </div>
+      )}
       <input
-        ref={ref}
+        type={type}
         className={cn(
-          'w-full bg-white/5 border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-all duration-200 focus:border-[#2563EB]/50 focus:ring-1 focus:ring-[#2563EB]/20',
-          Icon && 'pl-10',
-          error && 'border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20',
+          "flex h-10 w-full rounded-lg border border-white/[0.08] bg-[#090D13] px-3 py-2 text-sm text-content shadow-sm transition-all placeholder:text-content-subtle focus-visible:outline-none focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50",
+          Icon && "pl-9",
+          error && "border-danger focus-visible:border-danger focus-visible:ring-danger/40",
           className
         )}
+        ref={ref}
         {...props}
       />
+      {error && (
+        <p className="mt-1.5 text-xs text-danger font-medium">{error}</p>
+      )}
     </div>
-    {error && <p className="text-xs text-red-400">{error}</p>}
-  </div>
-));
-Input.displayName = 'Input';
+  );
+});
+Input.displayName = "Input";
 
-export const Textarea = React.forwardRef(({ label, error, className, ...props }, ref) => (
-  <div className="space-y-1.5">
-    {label && <label className="block text-sm font-medium text-slate-300">{label}</label>}
-    <textarea
-      ref={ref}
-      className={cn(
-        'w-full bg-white/5 border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 outline-none transition-all duration-200 focus:border-[#2563EB]/50 focus:ring-1 focus:ring-[#2563EB]/20 resize-none',
-        error && 'border-red-500/50',
-        className
+export const Textarea = forwardRef(({ className, error, ...props }, ref) => {
+  return (
+    <div className="relative w-full">
+      <textarea
+        className={cn(
+          "flex min-h-[80px] w-full rounded-lg border border-white/[0.08] bg-[#090D13] px-3 py-2.5 text-sm text-content shadow-sm transition-all placeholder:text-content-subtle focus-visible:outline-none focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 font-mono",
+          error && "border-danger focus-visible:border-danger focus-visible:ring-danger/40",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+      {error && (
+        <p className="mt-1.5 text-xs text-danger font-medium">{error}</p>
       )}
-      {...props}
-    />
-    {error && <p className="text-xs text-red-400">{error}</p>}
-  </div>
-));
-Textarea.displayName = 'Textarea';
+    </div>
+  );
+});
+Textarea.displayName = "Textarea";
 
-export const Select = React.forwardRef(({ label, error, options = [], children, className, ...props }, ref) => (
-  <div className="space-y-1.5">
-    {label && <label className="block text-sm font-medium text-slate-300">{label}</label>}
-    <select
-      ref={ref}
-      className={cn(
-        'w-full bg-white/5 border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm text-white outline-none transition-all duration-200 focus:border-[#2563EB]/50 focus:ring-1 focus:ring-[#2563EB]/20 appearance-none cursor-pointer',
-        error && 'border-red-500/50',
-        className
+export const Select = forwardRef(({ className, options, children, error, ...props }, ref) => {
+  return (
+    <div className="relative w-full">
+      <select
+        className={cn(
+          "flex h-10 w-full appearance-none rounded-lg border border-white/[0.08] bg-[#090D13] px-3 py-2 text-sm text-content shadow-sm transition-all focus-visible:outline-none focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50",
+          error && "border-danger focus-visible:border-danger",
+          className
+        )}
+        ref={ref}
+        {...props}
+      >
+        {options ? options.map((opt) => (
+          <option key={opt.value} value={opt.value} className="bg-[#0D131C] text-content">
+            {opt.label || opt.value}
+          </option>
+        )) : children}
+      </select>
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-content-subtle">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {error && (
+        <p className="mt-1.5 text-xs text-danger font-medium">{error}</p>
       )}
-      {...props}
-    >
-      {children ? children : options.map(opt => (
-        <option key={opt.value} value={opt.value} className="bg-[#1E293B] text-white">{opt.label}</option>
-      ))}
-    </select>
-    {error && <p className="text-xs text-red-400">{error}</p>}
-  </div>
-));
-Select.displayName = 'Select';
+    </div>
+  );
+});
+Select.displayName = "Select";
