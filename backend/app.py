@@ -13,7 +13,13 @@ from middleware.security import init_middleware
 
 def create_app(*, mongo_client=None, database_name="code_review_assistant"):
     """Create the Flask application; tests may inject an in-memory Mongo client."""
-    if mongo_client is None:
+    import sys
+    is_testing = (
+        mongo_client is not None
+        or os.getenv("TESTING", "").lower() in ("true", "1")
+        or "pytest" in sys.modules
+    )
+    if mongo_client is None and not is_testing:
         settings.validate_settings()
 
     dictConfig({
@@ -50,6 +56,12 @@ def create_app(*, mongo_client=None, database_name="code_review_assistant"):
 
     if mongo_client is not None:
         init_mongo(mongo_client=mongo_client, database_name=database_name)
+    elif is_testing:
+        try:
+            import mongomock
+            init_mongo(mongo_client=mongomock.MongoClient(), database_name=database_name)
+        except Exception:
+            init_mongo(settings.mongo_uri or "mongodb://localhost:27017", database_name=database_name)
 
     from api.review_routes import review_bp
     from api.auth_routes import auth_bp
@@ -99,7 +111,16 @@ def create_app(*, mongo_client=None, database_name="code_review_assistant"):
     return app
 
 
-app = create_app()
+import sys
+_is_test_env = os.getenv("TESTING", "").lower() in ("true", "1") or "pytest" in sys.modules
+if _is_test_env:
+    try:
+        import mongomock
+        app = create_app(mongo_client=mongomock.MongoClient(), database_name="test_code_review")
+    except Exception:
+        app = create_app()
+else:
+    app = create_app()
 
 
 if __name__ == "__main__":

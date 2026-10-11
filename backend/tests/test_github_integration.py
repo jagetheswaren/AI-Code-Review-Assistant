@@ -206,3 +206,12 @@ def test_oauth_callback_invalid_state(client):
     response = client.get('/api/github/oauth/callback?code=fake-code&state=fake-state')
     assert response.status_code == 400
     assert response.json["error"] == "Invalid OAuth state"
+
+
+def test_oauth_config_endpoint(client):
+    response = client.get('/api/github/oauth/config')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "configured" in data
+    assert "client_id_configured" in data
+    assert "callback_url" in data

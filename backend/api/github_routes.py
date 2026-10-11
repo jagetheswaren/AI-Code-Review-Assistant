@@ -34,6 +34,18 @@ def token_required(f):
     return decorated
 
 
+@github_bp.route('/api/github/oauth/config', methods=['GET'])
+def github_oauth_config():
+    client_id = current_app.config.get('GITHUB_CLIENT_ID')
+    client_secret = current_app.config.get('GITHUB_CLIENT_SECRET')
+    configured = bool(client_id and client_secret)
+    return jsonify({
+        "configured": configured,
+        "client_id_configured": bool(client_id),
+        "callback_url": current_app.config.get('GITHUB_OAUTH_CALLBACK_URL') or 'http://localhost:5000/api/github/oauth/callback',
+    })
+
+
 @github_bp.route('/api/github/oauth/authorize', methods=['GET'])
 @token_required
 def github_authorize():

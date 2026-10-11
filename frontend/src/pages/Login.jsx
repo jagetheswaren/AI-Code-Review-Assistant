@@ -35,8 +35,23 @@ export default function Login() {
     }
   };
 
-  const handleGithubLogin = () => {
-    window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/github/oauth/authorize`;
+  const handleGithubLogin = async () => {
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/github/oauth/config`);
+      const data = await res.json();
+      if (!data?.configured) {
+        const msg = 'GitHub OAuth App is not configured. Please add GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET to backend/.env, or sign in using your email and password.';
+        setErrorMessage(msg);
+        toastError(msg);
+        return;
+      }
+      window.location.href = `${apiUrl}/github/oauth/authorize`;
+    } catch {
+      const msg = 'GitHub OAuth App is not configured. Please sign in with email and password, or connect your Personal Access Token in Settings.';
+      setErrorMessage(msg);
+      toastError(msg);
+    }
   };
 
   return (
